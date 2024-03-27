@@ -406,3 +406,20 @@ class TestShellPlugin:
         assert [Path(f) for f in sorted(executable_files)] == [
             examples_dir / "shell-file.weird.suffix",
         ]
+
+    def test_find_executable_files_should_find_symlinks(self, tmp_path):
+        plugin = ShellPlugin({})
+
+        foo_file_path = tmp_path.joinpath("foo.sh")
+        foo_file_path.write_text("#!/bin/sh\necho foo")
+        foo_file_link = foo_file_path.with_suffix(".link.sh")
+        foo_file_link.symlink_to(foo_file_path)
+
+        bar_dir_path = tmp_path.joinpath("bar")
+        bar_dir_path.mkdir()
+        bar_link_path = bar_dir_path.with_suffix(".link")
+        bar_link_path.symlink_to(bar_dir_path)
+
+        executable_files = plugin.find_executable_files(str(tmp_path))
+
+        assert set(executable_files) == {str(f) for f in (foo_file_path, foo_file_link)}

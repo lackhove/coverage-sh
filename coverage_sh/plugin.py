@@ -348,7 +348,7 @@ class ShellPlugin(CoveragePlugin):
     ) -> Iterable[str]:
         for f in _iterdir(Path(src_dir)):
             # TODO: Use coverage's logic for figuring out if a file should be excluded
-            if not (f.is_file() or f.is_symlink()) or any(
+            if not (f.is_file() or (f.is_symlink() and f.resolve().is_file())) or any(
                 p.startswith(".") for p in f.parts
             ):
                 continue
