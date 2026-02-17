@@ -12,14 +12,12 @@ dependencies = [
     "tree-sitter==0.20.0",
 ]
 readme = "README.md"
-requires-python = ">= 3.8"
+requires-python = ">= 3.10"
 license = { text = "MIT" }
 keywords = ["coverage", "plugin", "shell", "bash", "sh"]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -36,7 +34,7 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "ruff==0.3.2",
-    "mypy>=1.9.0",
+    "mypy==1.9.0",
     "pytest>=7.4.3",
     "setuptools>=69.0.2",
     "types-tree-sitter-languages>=1.10.0.20240201",
@@ -55,8 +53,8 @@ packages = ["coverage_sh"]
 line-length = 88
 indent-width = 4
 
-# Assume Python 3.8
-target-version = "py38"
+# Assume Python 3.10
+target-version = "py310"
 
 exclude = ["tests/resources"]
 

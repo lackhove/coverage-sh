@@ -10,14 +10,13 @@ import selectors
 import stat
 import string
 import subprocess
-import sys
 import threading
 from collections import defaultdict
 from pathlib import Path
 from random import Random
 from socket import gethostname
 from time import sleep
-from typing import TYPE_CHECKING, Any, Iterable, Iterator
+from typing import TYPE_CHECKING, Any
 
 import coverage
 import magic
@@ -25,15 +24,12 @@ from coverage import CoveragePlugin, FileReporter, FileTracer
 from tree_sitter_languages import get_parser
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator
+
     from coverage.types import TLineNo
     from tree_sitter import Node
 
-if sys.version_info < (3, 9):
-    from typing import Dict, Set
-
-    LineData = Dict[str, Set[int]]
-else:
-    LineData = dict[str, set[int]]
+LineData = dict[str, set[int]]
 
 TMP_PATH = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp"))  # noqa: S108
 TRACEFILE_PREFIX = "shelltrace"
@@ -252,7 +248,7 @@ class PatchedPopen(OriginalPopen):  # type: ignore[type-arg]
 
         # convert args into kwargs
         sig = inspect.signature(subprocess.Popen)
-        kwargs.update(dict(zip(sig.parameters.keys(), args)))
+        kwargs.update(dict(zip(sig.parameters.keys(), args, strict=False)))
 
         self._parser_thread = CoverageParserThread(
             coverage_writer=CoverageWriter(coverage_data_path=self.data_file_path),
