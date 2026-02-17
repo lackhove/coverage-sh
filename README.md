@@ -6,7 +6,7 @@
 [![PyPI - License](https://img.shields.io/pypi/l/coverage-sh)](https://github.com/lackhove/coverage-sh/blob/main/LICENSE.txt)
 ![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/lackhove/f16009049fe5091e6d750a7bb7b4d68a/raw/covbadge.json)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![Rye](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/mitsuhiko/rye/main/artwork/badge.json)](https://rye-up.com)
+[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 
 A  [Coverage.py](https://github.com/nedbat/coveragepy) plugin to measure code coverage of shell (sh or bash) scripts
 executed from python.
