@@ -21,11 +21,13 @@ from typing import TYPE_CHECKING, Any, Iterable, Iterator
 
 import coverage
 import magic
+import tree_sitter_bash
 from coverage import CoveragePlugin, FileReporter, FileTracer
+from tree_sitter import Language, Parser
 
 if TYPE_CHECKING:
     from coverage.types import TLineNo
-    from tree_sitter import Node, Parser
+    from tree_sitter import Node
 
 if sys.version_info < (3, 9):
     from typing import Dict, Set
@@ -58,8 +60,6 @@ SUPPORTED_MIME_TYPES = {"text/x-shellscript"}
 
 
 class ShellFileReporter(FileReporter):
-    _parser: Parser
-
     def __init__(self, filename: str) -> None:
         super().__init__(filename)
 
@@ -67,13 +67,7 @@ class ShellFileReporter(FileReporter):
         self._content: str | None = None
         self._executable_lines: set[int] = set()
         self._init_parser()
-
-    def _init_parser(self) -> None:
-        import tree_sitter_bash
-        from tree_sitter import Language, Parser
-
-        language = Language(tree_sitter_bash.language())
-        self._parser = Parser(language)
+        self._parser = Parser(Language(tree_sitter_bash.language()))
 
     def source(self) -> str:
         if self._content is None:
