@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any, Iterable, Iterator
 
 import coverage
 import magic
-import tree_sitter_bash
+import tree_sitter_bash  # type: ignore [no-untyped-def]
 from coverage import CoveragePlugin, FileReporter, FileTracer
 from tree_sitter import Language, Parser
 
