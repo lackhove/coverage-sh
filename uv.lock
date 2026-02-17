@@ -141,14 +141,13 @@ dev = [
     { name = "pytest" },
     { name = "ruff" },
     { name = "setuptools" },
-    { name = "types-tree-sitter-languages" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "coverage", specifier = ">=7.3.3" },
     { name = "python-magic", specifier = ">=0.4.27" },
-    { name = "tree-sitter", specifier = ">=0.20.0" },
+    { name = "tree-sitter", specifier = ">=0.22.0" },
     { name = "tree-sitter-bash" },
 ]
 
@@ -158,7 +157,6 @@ dev = [
     { name = "pytest", specifier = ">=7.4.3" },
     { name = "ruff", specifier = "==0.3.2" },
     { name = "setuptools", specifier = ">=69.0.2" },
-    { name = "types-tree-sitter-languages", specifier = ">=1.10.0.20240201" },
 ]
 
 [[package]]
@@ -418,18 +416,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/f7/a0/c3050a6277dfcac8c480f514dc4fe49f3f65f0eac68b4702cbaca2584e85/tree_sitter_bash-0.25.1-cp310-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:a3332d71c7b7d5f78259b19d02d0ea111fcb82b72712ee4a93aaa5b226d3f0a8", size = 230074, upload-time = "2025-12-02T17:01:05.05Z" },
     { url = "https://files.pythonhosted.org/packages/71/0f/203fe6b27211387f4b9ba8c4a321567ca4ded2624dae6ccdbd2b6e940e17/tree_sitter_bash-0.25.1-cp310-abi3-win_amd64.whl", hash = "sha256:52a6802d9218f86278aa3e8b459c3abdad67eed0fde1f9f13aca5b6c634217a6", size = 195574, upload-time = "2025-12-02T17:01:06.412Z" },
     { url = "https://files.pythonhosted.org/packages/47/75/4ca1a9fabd8fb5aea78cea70f7837ce4dbf2afae115f62051e5fa99cba1c/tree_sitter_bash-0.25.1-cp310-abi3-win_arm64.whl", hash = "sha256:59115057ec2bae319e8082ff29559861045002964c3431ccb0fc92aa4bc9bccb", size = 191196, upload-time = "2025-12-02T17:01:07.486Z" },
-]
-
-[[package]]
-name = "types-tree-sitter-languages"
-version = "1.10.0.20250530"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "tree-sitter" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/e6/ea/c487b80120f909fe31115fbc9dfc49a3d9f7c7d5dc2193e507e717355d7e/types_tree_sitter_languages-1.10.0.20250530.tar.gz", hash = "sha256:c7350aeff95f84a7fb0ac90ddb615233db1459a3d9305bab304075462ffe810c", size = 7939, upload-time = "2025-05-30T17:05:41.235Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/70/4f/83922e3cd6415b399c2c83ce54966af143e423e1e5585decd90af2994716/types_tree_sitter_languages-1.10.0.20250530-py3-none-any.whl", hash = "sha256:06be82a29befc1b891b31672e91b979a0d1d8f148d12715172efbd380c520af3", size = 8042, upload-time = "2025-05-30T17:05:40.123Z" },
 ]
 
 [[package]]

@@ -8,7 +8,7 @@ authors = [
 dependencies = [
     "coverage>=7.3.3",
     "python-magic>=0.4.27",
-    "tree-sitter>=0.20.0",
+    "tree-sitter>=0.22.0",
     "tree-sitter-bash",
 ]
 readme = "README.md"
@@ -37,7 +37,6 @@ dev = [
     "mypy==1.9.0",
     "pytest>=7.4.3",
     "setuptools>=69.0.2",
-    "types-tree-sitter-languages>=1.10.0.20240201",
 ]
 
 [tool.hatch.metadata]

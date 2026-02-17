@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any
 
 import coverage
 import magic
-import tree_sitter_bash  # type: ignore [no-untyped-def]
+import tree_sitter_bash
 from coverage import CoveragePlugin, FileReporter, FileTracer
 from tree_sitter import Language, Parser
 
@@ -62,7 +62,6 @@ class ShellFileReporter(FileReporter):
         self.path = Path(filename)
         self._content: str | None = None
         self._executable_lines: set[int] = set()
-        self._init_parser()
         self._parser = Parser(Language(tree_sitter_bash.language()))
 
     def source(self) -> str:
