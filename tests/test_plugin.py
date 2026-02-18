@@ -1,7 +1,5 @@
 #  SPDX-License-Identifier: MIT
 #  Copyright (c) 2023-2024 Kilian Lackhove
-from __future__ import annotations
-
 import json
 import re
 import subprocess
