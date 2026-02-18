@@ -395,7 +395,9 @@ class TestPatchedPopen:
         if cov is not None:  # pragma: no cover
             cov.stop()
 
+        assert proc.stderr is not None
         assert proc.stderr.read() == ""
+        assert proc.stdout is not None
         assert proc.stdout.read() == SYNTAX_EXAMPLE_STDOUT
 
 
