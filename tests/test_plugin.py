@@ -142,56 +142,40 @@ def syntax_example_path(resources_dir, tmp_path):
 
 
 @pytest.mark.parametrize("cover_always", [(True), (False)])
-def test_end2end(dummy_project_dir, monkeypatch, cover_always: bool):
+def test_end2end(
+    dummy_project_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    cover_always: bool,
+) -> None:
     monkeypatch.chdir(dummy_project_dir)
 
-    coverage_file_path = dummy_project_dir.joinpath(".coverage")
+    coverage_file_path = Path(".coverage")
     assert not coverage_file_path.is_file()
 
     if cover_always:
-        pyproject_file = dummy_project_dir.joinpath("pyproject.toml")
+        pyproject_file = Path("pyproject.toml")
         with pyproject_file.open("a") as fd:
             fd.write("\n[tool.coverage.coverage_sh]\ncover_always = true")
 
-    try:
-        proc = subprocess.run(
-            [sys.executable, "-m", "coverage", "run", "main.py"],
-            cwd=dummy_project_dir,
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=2,
-        )
-    except subprocess.TimeoutExpired as e:  # pragma: no cover
-        assert e.stdout == "failed stdout"  # noqa: PT017
-        assert e.stderr == "failed stderr"  # noqa: PT017
-        assert False
+    proc = subprocess.run(
+        [sys.executable, "-m", "coverage", "run", "main.py"],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=2,
+    )
     assert proc.stderr == ""
     assert proc.stdout == SYNTAX_EXAMPLE_STDOUT
-    assert proc.returncode == 0
 
-    assert dummy_project_dir.joinpath(".coverage").is_file()
-    assert len(list(dummy_project_dir.glob(f".coverage.sh.{gethostname()}.*"))) == 1
+    assert Path(".coverage").is_file()
+    assert len(list(Path().glob(f".coverage.sh.{gethostname()}.*"))) == 1
 
-    proc = subprocess.run(
-        [sys.executable, "-m", "coverage", "combine"],
-        cwd=dummy_project_dir,
-        check=False,
-    )
-    print("recombined")
-    assert proc.returncode == 0
+    subprocess.check_call([sys.executable, "-m", "coverage", "combine"])
+    subprocess.check_call([sys.executable, "-m", "coverage", "html"])
 
-    proc = subprocess.run(
-        [sys.executable, "-m", "coverage", "html"], cwd=dummy_project_dir, check=False
-    )
-    assert proc.returncode == 0
+    subprocess.check_call([sys.executable, "-m", "coverage", "json"])
 
-    proc = subprocess.run(
-        [sys.executable, "-m", "coverage", "json"], cwd=dummy_project_dir, check=False
-    )
-    assert proc.returncode == 0
-
-    coverage_json = json.loads(dummy_project_dir.joinpath("coverage.json").read_text())
+    coverage_json = json.loads(Path("coverage.json").read_text())
     assert coverage_json["files"]["test.sh"]["executed_lines"] == [8, 9]
     assert coverage_json["files"]["syntax_example.sh"]["excluded_lines"] == []
     assert (
