@@ -13,7 +13,8 @@ def resources_dir():
 
 
 @pytest.fixture()
-def dummy_project_dir(resources_dir, tmp_path):
+def dummy_project_dir(resources_dir: Path, tmp_path: Path) -> Path:
+    """Fixture for a temporary copy of `testproject`"""
     source = resources_dir / "testproject"
     dest = tmp_path / "testproject"
     shutil.copytree(source, dest)
