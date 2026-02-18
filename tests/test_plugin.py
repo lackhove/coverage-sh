@@ -11,6 +11,7 @@ from collections import defaultdict
 from pathlib import Path
 from socket import gethostname
 from time import sleep
+from typing import cast
 
 import coverage
 import pytest
@@ -285,16 +286,16 @@ class TestCoverageParserThread:
             print("writer done")
 
     class CovLineParserSpy(CovLineParser):
-        def __init__(self):
+        def __init__(self) -> None:
             super().__init__()
-            self.recorded_lines = []
+            self.recorded_lines: list[str] = []
 
         def _report_lines(self, lines: list[str]) -> None:
             self.recorded_lines.extend(lines)
             super()._report_lines(lines)
 
     class CovWriterFake:
-        def __init__(self):
+        def __init__(self) -> None:
             self.line_data: LineData = defaultdict(set)
 
         def write(self, line_data: LineData) -> None:
@@ -304,7 +305,7 @@ class TestCoverageParserThread:
         parser = self.CovLineParserSpy()
         writer = self.CovWriterFake()
         parser_thread = CoverageParserThread(
-            coverage_writer=writer,
+            coverage_writer=cast("CoverageWriter", writer),
             name="CoverageParserThread",
             parser=parser,
         )
@@ -412,7 +413,8 @@ class TestMonitorThread:
         parser_thread.start()
 
         monitor_thread = MonitorThread(
-            parser_thread=parser_thread, main_thread=self.MainThreadStub()
+            parser_thread=parser_thread,
+            main_thread=cast("threading.Thread", self.MainThreadStub()),
         )
         monitor_thread.start()
 
