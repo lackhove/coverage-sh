@@ -127,6 +127,9 @@ COVERAGE_LINE_COVERAGE = {
     "/home/dummy_user/dummy_dir_b": {10},
 }
 
+#: expected output of testproject/test.sh
+END2END_STDOUT = SYNTAX_EXAMPLE_STDOUT + "Hello from inner python\n"
+
 
 @pytest.fixture()
 def examples_dir(resources_dir):
@@ -165,7 +168,8 @@ def test_end2end(
         timeout=2,
     )
     assert proc.stderr == ""
-    assert proc.stdout == SYNTAX_EXAMPLE_STDOUT
+    assert proc.stdout == END2END_STDOUT
+    assert proc.returncode == 0
 
     assert Path(".coverage").is_file()
     assert len(list(Path().glob(f".coverage.sh.{gethostname()}.*"))) == 1
@@ -176,7 +180,7 @@ def test_end2end(
     subprocess.check_call([sys.executable, "-m", "coverage", "json"])
 
     coverage_json = json.loads(Path("coverage.json").read_text())
-    assert coverage_json["files"]["test.sh"]["executed_lines"] == [8, 9]
+    assert coverage_json["files"]["test.sh"]["executed_lines"] == [8, 9, 10]
     assert coverage_json["files"]["syntax_example.sh"]["excluded_lines"] == []
     assert (
         coverage_json["files"]["syntax_example.sh"]["executed_lines"]
@@ -380,7 +384,7 @@ class TestPatchedPopen:
         assert proc.stderr is not None
         assert proc.stderr.read() == ""
         assert proc.stdout is not None
-        assert proc.stdout.read() == SYNTAX_EXAMPLE_STDOUT
+        assert proc.stdout.read() == END2END_STDOUT
 
 
 class TestMonitorThread:
