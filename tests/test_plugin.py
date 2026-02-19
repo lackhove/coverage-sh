@@ -14,7 +14,6 @@ from typing import cast
 import coverage
 import pytest
 
-from coverage_sh import ShellPlugin
 from coverage_sh.plugin import (
     CoverageParserThread,
     CoverageWriter,
@@ -23,6 +22,7 @@ from coverage_sh.plugin import (
     MonitorThread,
     PatchedPopen,
     ShellFileReporter,
+    ShellPlugin,
     filename_suffix,
 )
 
