@@ -34,7 +34,7 @@ jobs:
           uv run ruff check .
       - name: Run mypy
         run: |
-          uv run mypy coverage_sh
+          uv run mypy .
       - name: Test with pytest
         run: |
           uv run coverage run --parallel-mode -m pytest
