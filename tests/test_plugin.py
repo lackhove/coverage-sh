@@ -6,6 +6,7 @@ import subprocess
 import sys
 import threading
 from collections import defaultdict
+from importlib.metadata import version
 from pathlib import Path
 from socket import gethostname
 from time import sleep
@@ -13,6 +14,7 @@ from typing import cast
 
 import coverage
 import pytest
+from packaging.version import Version
 
 from coverage_sh.plugin import (
     CoverageParserThread,
@@ -129,6 +131,8 @@ COVERAGE_LINE_COVERAGE = {
 
 #: expected output of testproject/test.sh
 END2END_STDOUT = SYNTAX_EXAMPLE_STDOUT + "Hello from inner python\n"
+#: lines executed inside inner.py
+INNER_PY_EXECUTED_LINES = [2]
 
 
 @pytest.fixture()
@@ -189,6 +193,53 @@ def test_end2end(
     assert (
         coverage_json["files"]["syntax_example.sh"]["missing_lines"]
         == SYNTAX_EXAMPLE_MISSING_LINES
+    )
+
+
+@pytest.fixture(scope="session")
+def covpy_installs_pth() -> None:  # noqa: PT004
+    """Skip if coveragepy does not bundle a pth file"""
+    if Version(version("coverage")) < Version("7.13.0"):
+        pytest.skip("coverage < 7.13.0 does not include pth file")  # pragma: no cover
+
+
+@pytest.mark.usefixtures("covpy_installs_pth")
+def test_end2end_innerpy(
+    dummy_project_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    Test coverage on python called via shell script
+
+    For this to work it requires deploying a .pth file inside sitepackage.
+
+    * coverage >= 7.13.0 does this at install time
+    * coverage >= 7.9.0 does this dynamically which fails if sitepackage is readonly
+    * Older versions don't have the "patch" config options
+
+    This used to be broken, see https://github.com/lackhove/coverage-sh/issues/22
+    """
+    monkeypatch.chdir(dummy_project_dir)
+    pyproject_text = """\
+[tool.coverage.run]
+plugins = ["coverage_sh"]
+patch = ["subprocess"]
+"""
+    Path("pyproject.toml").write_text(pyproject_text)
+    proc = subprocess.run(
+        [sys.executable, "-m", "coverage", "run", "main.py"],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=2,
+    )
+    assert proc.stderr == ""
+    assert proc.stdout == END2END_STDOUT
+    subprocess.check_call([sys.executable, "-m", "coverage", "combine"])
+    subprocess.check_call([sys.executable, "-m", "coverage", "json"])
+    coverage_json = json.loads(Path("coverage.json").read_text())
+    assert (
+        coverage_json["files"]["inner.py"]["executed_lines"] == INNER_PY_EXECUTED_LINES
     )
 
 
