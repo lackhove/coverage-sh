@@ -1,6 +1,7 @@
 #  SPDX-License-Identifier: MIT
 #  Copyright (c) 2023-2024 Kilian Lackhove
 import json
+import os
 import re
 import subprocess
 import sys
@@ -14,6 +15,7 @@ from typing import cast
 
 import coverage
 import pytest
+from coverage.config import CoverageConfig
 from packaging.version import Version
 
 from coverage_sh.plugin import (
@@ -498,3 +500,19 @@ class TestShellPlugin:
         executable_files = plugin.find_executable_files(str(tmp_path))
 
         assert set(executable_files) == {str(f) for f in (foo_file_path, foo_file_link)}
+
+    def test_configure_always0(self) -> None:
+        plugin = ShellPlugin({})
+        old_data_file_path = Path("/old/value")
+        PatchedPopen.data_file_path = old_data_file_path
+        config = CoverageConfig()
+        plugin.configure(config)
+        assert PatchedPopen.data_file_path != old_data_file_path
+        assert PatchedPopen.data_file_path.name == ".coverage"
+
+    def test_configure_always1(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("BASH_ENV", raising=False)
+        plugin = ShellPlugin({"cover_always": True})
+        config = CoverageConfig()
+        plugin.configure(config)
+        assert os.getenv("BASH_ENV")
