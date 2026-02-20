@@ -1,7 +1,8 @@
 #  SPDX-License-Identifier: MIT
 #  Copyright (c) 2023 Kilian Lackhove
 
-def main():
+
+def main() -> None:
     print("hello world")
 
 

@@ -4,9 +4,8 @@
 import subprocess
 
 
-def main():
+def main() -> None:
     subprocess.run(["./test.sh"])
-
 
 
 if __name__ == "__main__":
