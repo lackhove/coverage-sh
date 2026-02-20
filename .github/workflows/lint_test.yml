@@ -16,7 +16,7 @@ jobs:
 
     strategy:
       matrix:
-        python-version: [ "3.10", "3.11", "3.12"]
+        python-version: [ "3.9", "3.10", "3.11", "3.12"]
       fail-fast: false
 
     steps:
@@ -69,18 +69,18 @@ jobs:
       - name: Combine coverage & fail if it's <100%.
         run: |
           python -Im pip install coverage[toml]
-          
+
           rm -f .coverage.sh.*
           python -Im coverage combine
           python -Im coverage html --skip-covered --skip-empty
           python -Im coverage json
-          
+
           # Report and write to summary.
           python -Im coverage report --format=markdown >> $GITHUB_STEP_SUMMARY
-          
+
           # Report again and fail if under 100%.
           python -Im coverage report --fail-under=100
-          
+
           export TOTAL=$(python -c "import json;print(json.load(open('coverage.json'))['totals']['percent_covered_display'])")
           echo "total=$TOTAL" >> $GITHUB_ENV
 
