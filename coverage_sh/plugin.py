@@ -249,7 +249,7 @@ class PatchedPopen(OriginalPopen):  # type: ignore[type-arg]
 
         # convert args into kwargs
         sig = inspect.signature(subprocess.Popen)
-        kwargs.update(dict(zip(sig.parameters.keys(), args, strict=False)))
+        kwargs.update(dict(zip(sig.parameters.keys(), args)))
 
         self._parser_thread = CoverageParserThread(
             coverage_writer=CoverageWriter(coverage_data_path=self.data_file_path),
