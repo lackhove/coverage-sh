@@ -199,27 +199,36 @@ def test_end2end(
 
 
 @pytest.fixture(scope="session")
-def covpy_installs_pth() -> None:  # noqa: PT004
-    """Skip if coveragepy does not bundle a pth file"""
+def covpy_installs_pth_at_install_time() -> None:  # noqa: PT004
+    """Skip if coveragepy does not install a .pth file into site-packages at install time.
+
+    - >= 7.13.0: writes the .pth file during pip install — reliable in all environments.
+    - >= 7.9.0:  installs it dynamically at runtime — fails if site-packages is read-only.
+    - <  7.9.0:  no ``patch`` config option at all.
+
+    We skip below 7.13.0 to ensure reliability in all environments, even though the
+    underlying fix would also work on 7.9.x-7.12.x given a writable site-packages.
+    """
     if Version(version("coverage")) < Version("7.13.0"):
-        pytest.skip("coverage < 7.13.0 does not include pth file")  # pragma: no cover
+        pytest.skip(
+            "coverage < 7.13.0 does not install .pth file at install time"
+        )  # pragma: no cover
 
 
-@pytest.mark.usefixtures("covpy_installs_pth")
-def test_end2end_innerpy(
+@pytest.mark.usefixtures("covpy_installs_pth_at_install_time")
+def test_end2end_python_subprocess_via_shell(
     dummy_project_dir: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """
-    Test coverage on python called via shell script
+    """Test that a Python script invoked by a shell script is measured correctly.
 
-    For this to work it requires deploying a .pth file inside sitepackage.
-
-    * coverage >= 7.13.0 does this at install time
-    * coverage >= 7.9.0 does this dynamically which fails if sitepackage is readonly
-    * Older versions don't have the "patch" config options
-
-    This used to be broken, see https://github.com/lackhove/coverage-sh/issues/22
+    Call chain: ``coverage run main.py`` -> ``test.sh`` -> ``inner.py``.
+    coverage-sh handles shell script measurement; ``inner.py`` is measured via
+    coveragepy's subprocess mechanism, which requires:
+    - ``patch = ["subprocess"]``: patches the ``subprocess`` module so spawned Python
+      processes inherit coverage measurement.
+    - A ``.pth`` file in site-packages: activates coverage in child processes via
+      ``coverage.process_startup()``.
     """
     monkeypatch.chdir(dummy_project_dir)
     pyproject_text = """\
@@ -461,10 +470,6 @@ class TestMonitorThread:
 
 
 class TestShellPlugin:
-    def test_init_cover_always(self):
-        plugin = ShellPlugin({"cover_always": True})
-        del plugin
-
     def test_file_tracer_should_return_None(self):
         plugin = ShellPlugin({})
         assert plugin.file_tracer("foobar") is None
@@ -501,7 +506,12 @@ class TestShellPlugin:
 
         assert set(executable_files) == {str(f) for f in (foo_file_path, foo_file_link)}
 
-    def test_configure_always0(self) -> None:
+    def test_configure_should_update_data_file_path(self) -> None:
+        """configure() should set PatchedPopen.data_file_path from the coverage config.
+
+        Verifies that calling configure() updates the shared data_file_path used by
+        PatchedPopen to locate the coverage data file, replacing any previously set value.
+        """
         plugin = ShellPlugin({})
         old_data_file_path = Path("/old/value")
         PatchedPopen.data_file_path = old_data_file_path
@@ -510,7 +520,15 @@ class TestShellPlugin:
         assert PatchedPopen.data_file_path != old_data_file_path
         assert PatchedPopen.data_file_path.name == ".coverage"
 
-    def test_configure_always1(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_configure_should_set_bash_env_when_cover_always(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """configure() should set BASH_ENV when cover_always is enabled.
+
+        When cover_always=True, configure() must export BASH_ENV so that bash sources
+        the coverage helper script automatically for every shell invocation, including
+        those not spawned via subprocess.
+        """
         monkeypatch.delenv("BASH_ENV", raising=False)
         plugin = ShellPlugin({"cover_always": True})
         config = CoverageConfig()

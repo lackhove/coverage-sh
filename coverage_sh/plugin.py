@@ -305,11 +305,9 @@ def _iterdir(path: Path) -> Iterator[Path]:
 
 
 class ShellPlugin(CoveragePlugin):
-    _helper_path: Path | None = None
-
     def __init__(self, options: dict[str, Any]):
         self.options = options
-        self._helper_path = None
+        self._helper_path: None | Path = None
 
     def configure(self, config: TConfigurable) -> None:
         data_file_option = config.get_option("run:data_file")
