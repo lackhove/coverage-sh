@@ -16,7 +16,7 @@ from pathlib import Path
 from random import Random
 from socket import gethostname
 from time import sleep
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import coverage
 import magic
@@ -27,7 +27,7 @@ from tree_sitter import Language, Parser
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
 
-    from coverage.types import TLineNo
+    from coverage.types import TConfigurable, TLineNo
     from tree_sitter import Node
 
 LineData = dict[str, set[int]]
@@ -307,9 +307,11 @@ def _iterdir(path: Path) -> Iterator[Path]:
 class ShellPlugin(CoveragePlugin):
     def __init__(self, options: dict[str, Any]):
         self.options = options
-        self._helper_path = None
+        self._helper_path: None | Path = None
 
-        coverage_data_path = Path(coverage.Coverage().config.data_file).absolute()
+    def configure(self, config: TConfigurable) -> None:
+        data_file_option = config.get_option("run:data_file")
+        coverage_data_path = Path(cast("str", data_file_option)).absolute()
 
         if self.options.get("cover_always", False):
             parser_thread = CoverageParserThread(

@@ -7,3 +7,4 @@
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 "${SCRIPT_DIR}"/syntax_example.sh
+"${SCRIPT_DIR}"/inner.py

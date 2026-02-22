@@ -1,11 +1,13 @@
 #  SPDX-License-Identifier: MIT
 #  Copyright (c) 2023-2024 Kilian Lackhove
 import json
+import os
 import re
 import subprocess
 import sys
 import threading
 from collections import defaultdict
+from importlib.metadata import version
 from pathlib import Path
 from socket import gethostname
 from time import sleep
@@ -13,6 +15,8 @@ from typing import cast
 
 import coverage
 import pytest
+from coverage.config import CoverageConfig
+from packaging.version import Version
 
 from coverage_sh.plugin import (
     CoverageParserThread,
@@ -127,6 +131,11 @@ COVERAGE_LINE_COVERAGE = {
     "/home/dummy_user/dummy_dir_b": {10},
 }
 
+#: expected output of testproject/test.sh
+END2END_STDOUT = SYNTAX_EXAMPLE_STDOUT + "Hello from inner python\n"
+#: lines executed inside inner.py
+INNER_PY_EXECUTED_LINES = [2]
+
 
 @pytest.fixture()
 def examples_dir(resources_dir):
@@ -165,7 +174,8 @@ def test_end2end(
         timeout=2,
     )
     assert proc.stderr == ""
-    assert proc.stdout == SYNTAX_EXAMPLE_STDOUT
+    assert proc.stdout == END2END_STDOUT
+    assert proc.returncode == 0
 
     assert Path(".coverage").is_file()
     assert len(list(Path().glob(f".coverage.sh.{gethostname()}.*"))) == 1
@@ -176,7 +186,7 @@ def test_end2end(
     subprocess.check_call([sys.executable, "-m", "coverage", "json"])
 
     coverage_json = json.loads(Path("coverage.json").read_text())
-    assert coverage_json["files"]["test.sh"]["executed_lines"] == [8, 9]
+    assert coverage_json["files"]["test.sh"]["executed_lines"] == [8, 9, 10]
     assert coverage_json["files"]["syntax_example.sh"]["excluded_lines"] == []
     assert (
         coverage_json["files"]["syntax_example.sh"]["executed_lines"]
@@ -185,6 +195,62 @@ def test_end2end(
     assert (
         coverage_json["files"]["syntax_example.sh"]["missing_lines"]
         == SYNTAX_EXAMPLE_MISSING_LINES
+    )
+
+
+@pytest.fixture(scope="session")
+def covpy_installs_pth_at_install_time() -> None:  # noqa: PT004
+    """Skip if coveragepy does not install a .pth file into site-packages at install time.
+
+    - >= 7.13.0: writes the .pth file during pip install — reliable in all environments.
+    - >= 7.9.0:  installs it dynamically at runtime — fails if site-packages is read-only.
+    - <  7.9.0:  no ``patch`` config option at all.
+
+    We skip below 7.13.0 to ensure reliability in all environments, even though the
+    underlying fix would also work on 7.9.x-7.12.x given a writable site-packages.
+    """
+    if Version(version("coverage")) < Version("7.13.0"):
+        pytest.skip(
+            "coverage < 7.13.0 does not install .pth file at install time"
+        )  # pragma: no cover
+
+
+@pytest.mark.usefixtures("covpy_installs_pth_at_install_time")
+def test_end2end_python_subprocess_via_shell(
+    dummy_project_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test that a Python script invoked by a shell script is measured correctly.
+
+    Call chain: ``coverage run main.py`` -> ``test.sh`` -> ``inner.py``.
+    coverage-sh handles shell script measurement; ``inner.py`` is measured via
+    coveragepy's subprocess mechanism, which requires:
+    - ``patch = ["subprocess"]``: patches the ``subprocess`` module so spawned Python
+      processes inherit coverage measurement.
+    - A ``.pth`` file in site-packages: activates coverage in child processes via
+      ``coverage.process_startup()``.
+    """
+    monkeypatch.chdir(dummy_project_dir)
+    pyproject_text = """\
+[tool.coverage.run]
+plugins = ["coverage_sh"]
+patch = ["subprocess"]
+"""
+    Path("pyproject.toml").write_text(pyproject_text)
+    proc = subprocess.run(
+        [sys.executable, "-m", "coverage", "run", "main.py"],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=2,
+    )
+    assert proc.stderr == ""
+    assert proc.stdout == END2END_STDOUT
+    subprocess.check_call([sys.executable, "-m", "coverage", "combine"])
+    subprocess.check_call([sys.executable, "-m", "coverage", "json"])
+    coverage_json = json.loads(Path("coverage.json").read_text())
+    assert (
+        coverage_json["files"]["inner.py"]["executed_lines"] == INNER_PY_EXECUTED_LINES
     )
 
 
@@ -380,7 +446,7 @@ class TestPatchedPopen:
         assert proc.stderr is not None
         assert proc.stderr.read() == ""
         assert proc.stdout is not None
-        assert proc.stdout.read() == SYNTAX_EXAMPLE_STDOUT
+        assert proc.stdout.read() == END2END_STDOUT
 
 
 class TestMonitorThread:
@@ -404,10 +470,6 @@ class TestMonitorThread:
 
 
 class TestShellPlugin:
-    def test_init_cover_always(self):
-        plugin = ShellPlugin({"cover_always": True})
-        del plugin
-
     def test_file_tracer_should_return_None(self):
         plugin = ShellPlugin({})
         assert plugin.file_tracer("foobar") is None
@@ -443,3 +505,32 @@ class TestShellPlugin:
         executable_files = plugin.find_executable_files(str(tmp_path))
 
         assert set(executable_files) == {str(f) for f in (foo_file_path, foo_file_link)}
+
+    def test_configure_should_update_data_file_path(self) -> None:
+        """configure() should set PatchedPopen.data_file_path from the coverage config.
+
+        Verifies that calling configure() updates the shared data_file_path used by
+        PatchedPopen to locate the coverage data file, replacing any previously set value.
+        """
+        plugin = ShellPlugin({})
+        old_data_file_path = Path("/old/value")
+        PatchedPopen.data_file_path = old_data_file_path
+        config = CoverageConfig()
+        plugin.configure(config)
+        assert PatchedPopen.data_file_path != old_data_file_path
+        assert PatchedPopen.data_file_path.name == ".coverage"
+
+    def test_configure_should_set_bash_env_when_cover_always(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """configure() should set BASH_ENV when cover_always is enabled.
+
+        When cover_always=True, configure() must export BASH_ENV so that bash sources
+        the coverage helper script automatically for every shell invocation, including
+        those not spawned via subprocess.
+        """
+        monkeypatch.delenv("BASH_ENV", raising=False)
+        plugin = ShellPlugin({"cover_always": True})
+        config = CoverageConfig()
+        plugin.configure(config)
+        assert os.getenv("BASH_ENV")
