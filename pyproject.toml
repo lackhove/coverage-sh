@@ -1,6 +1,6 @@
 [project]
 name = "coverage-sh"
-version = "0.4.5    "
+version = "0.4.5"
 description = "A  Coverage.py plugin to measure code coverage of shell scripts from python."
 authors = [
     { name = "Kilian Lackhove", email = "kilian@lackhove.de" }
@@ -13,11 +13,10 @@ dependencies = [
 ]
 readme = "README.md"
 requires-python = ">= 3.9"
-license = { text = "MIT" }
+license = "MIT"
 keywords = ["coverage", "plugin", "shell", "bash", "sh"]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -34,14 +33,11 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "ruff==0.3.2",
-    "mypy==1.9.0",
+    "ruff==0.15.*",
+    "mypy>=1.19",
     "pytest>=7.4.3",
     "setuptools>=69.0.2",
 ]
-
-[tool.hatch.metadata]
-allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["coverage_sh"]
@@ -60,10 +56,10 @@ select = ["ALL"]
 ignore = [
     "E501", # Line too long
     "D", # missing docstring
-    "ANN101", # Missing type annotation for `self` in method
     "ANN204", # Missing return type annotation for special method `__init__`
     "ANN002", # Missing type annotation for `*args`
     "ANN003", # Missing type annotation for `**kwargs`
+    "S311", # Standard pseudo-random generators are not suitable for cryptographic purposes (we use os.urandom)
     "S603", # subprocess-without-shell-equals-true
     "TD", # flake8-todos
     "FIX", #flake8-fixme
@@ -74,7 +70,7 @@ ignore = [
     "EM102", # Exception must not use an f-string literal, assign to variable first
 ]
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["ANN", "D", "S101", "PLR2004", "N802", "PT015", "B011", "INP001", "FBT001", "T201"]
 "tests/resources/**/*.py" = ["ALL"]
 

@@ -7,12 +7,12 @@ from pathlib import Path
 import pytest
 
 
-@pytest.fixture()
+@pytest.fixture
 def resources_dir():
     return Path(__file__).parent / "resources"
 
 
-@pytest.fixture()
+@pytest.fixture
 def dummy_project_dir(resources_dir: Path, tmp_path: Path) -> Path:
     """Fixture for a temporary copy of `testproject`"""
     source = resources_dir / "testproject"

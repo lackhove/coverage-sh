@@ -155,7 +155,7 @@ class CoverageWriter:
         )
 
         coverage_data.add_file_tracers(
-            {f: "coverage_sh.ShellPlugin" for f in line_data}
+            dict.fromkeys(line_data, "coverage_sh.ShellPlugin")
         )
         coverage_data.add_lines(line_data)
         coverage_data.write()

@@ -137,12 +137,12 @@ END2END_STDOUT = SYNTAX_EXAMPLE_STDOUT + "Hello from inner python\n"
 INNER_PY_EXECUTED_LINES = [2]
 
 
-@pytest.fixture()
+@pytest.fixture
 def examples_dir(resources_dir):
     return resources_dir / "examples"
 
 
-@pytest.fixture()
+@pytest.fixture
 def syntax_example_path(resources_dir, tmp_path):
     original_path = resources_dir / "syntax_example.sh"
     working_copy_path = tmp_path / "syntax_example.sh"
@@ -199,7 +199,7 @@ def test_end2end(
 
 
 @pytest.fixture(scope="session")
-def covpy_installs_pth_at_install_time() -> None:  # noqa: PT004
+def covpy_installs_pth_at_install_time() -> None:
     """Skip if coveragepy does not install a .pth file into site-packages at install time.
 
     - >= 7.13.0: writes the .pth file during pip install — reliable in all environments.
@@ -255,7 +255,7 @@ patch = ["subprocess"]
 
 
 class TestShellFileReporter:
-    @pytest.fixture()
+    @pytest.fixture
     def reporter(self, syntax_example_path):
         return ShellFileReporter(str(syntax_example_path))
 

@@ -21,9 +21,7 @@ uv sync --locked --all-extras --dev
 
 | Task | Command |
 |---|---|
-| Format check | `uv run ruff format --check .` |
 | Auto-format | `uv run ruff format .` |
-| Lint | `uv run ruff check .` |
 | Lint + auto-fix | `uv run ruff check --fix --unsafe-fixes .` |
 | Type check | `uv run mypy .` |
 | Run all tests | `uv run pytest` |
@@ -32,7 +30,7 @@ uv sync --locked --all-extras --dev
 
 **Before marking any task as complete, always run:**
 ```bash
-uv run ruff check . && uv run mypy . && uv run pytest
+uv run ruff check --fix --unsafe-fixes . && uv run mypy . && uv run pytest
 ```
 
 ---
@@ -70,60 +68,7 @@ PEP8 + Black. Run `uv run ruff check --fix --unsafe-fixes .` then `uv run ruff f
 
 ---
 
-## Import Conventions
 
-Every source file begins with:
-
-```python
-from __future__ import annotations
-```
-
-Import ordering within a file:
-
-1. `from __future__ import annotations` — always first
-2. Standard library bare imports (`import os`, `import sys`, …)
-3. Standard library `from … import …`
-4. Third-party bare imports
-5. Third-party `from … import …`
-6. `if TYPE_CHECKING:` block — types needed only for annotations
-
-```python
-from __future__ import annotations
-
-import contextlib
-import os
-from pathlib import Path
-from typing import TYPE_CHECKING, Any
-
-import coverage
-
-if TYPE_CHECKING:
-    from collections.abc import Iterable
-    from coverage.types import TLineNo
-    from tree_sitter import Node
-```
-
-- Within the package: use **relative** imports (`from .plugin import ShellPlugin`)
-- In tests and externally: use **absolute** imports (`from coverage_sh.plugin import …`)
-- Put `TYPE_CHECKING`-only imports in the `if TYPE_CHECKING:` block to avoid runtime cost
-
----
-
-## Naming Conventions
-
-| Construct | Convention | Example |
-|---|---|---|
-| Modules / files | `snake_case` | `plugin.py`, `test_plugin.py` |
-| Classes | `PascalCase` | `ShellFileReporter`, `CovLineParser` |
-| Test classes | `Test` prefix | `TestShellFileReporter` |
-| Functions / methods | `snake_case` | `find_executable_files()` |
-| Private methods | leading `_` | `_parse_ast()`, `_iterdir()` |
-| Test methods | `test_<what>_should_<expected_outcome>` | `test_source_should_be_cached` |
-| Module constants | `UPPER_SNAKE_CASE` | `TRACEFILE_PREFIX`, `TMP_PATH` |
-| Local variables | `snake_case` | `fifo_path`, `line_data` |
-| Type aliases | `PascalCase` | `LineData = dict[str, set[int]]` |
-
----
 
 ## Error Handling
 
