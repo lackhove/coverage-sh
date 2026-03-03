@@ -138,12 +138,12 @@ INNER_PY_EXECUTED_LINES = [2]
 
 
 @pytest.fixture
-def examples_dir(resources_dir):
+def examples_dir(resources_dir: Path) -> Path:
     return resources_dir / "examples"
 
 
 @pytest.fixture
-def syntax_example_path(resources_dir, tmp_path):
+def syntax_example_path(resources_dir: Path, tmp_path: Path) -> Path:
     original_path = resources_dir / "syntax_example.sh"
     working_copy_path = tmp_path / "syntax_example.sh"
     working_copy_path.write_bytes(original_path.read_bytes())
@@ -256,47 +256,53 @@ patch = ["subprocess"]
 
 class TestShellFileReporter:
     @pytest.fixture
-    def reporter(self, syntax_example_path):
+    def reporter(self, syntax_example_path: Path) -> ShellFileReporter:
         return ShellFileReporter(str(syntax_example_path))
 
-    def test_source_should_be_cached(self, syntax_example_path, reporter):
+    def test_source_should_be_cached(
+        self,
+        syntax_example_path: Path,
+        reporter: ShellFileReporter,
+    ) -> None:
         reference = Path(reporter.path).read_text()
 
         assert reporter.source() == reference
         syntax_example_path.unlink()
         assert reporter.source() == reference
 
-    def test_lines_should_match_reference(self, reporter):
+    def test_lines_should_match_reference(self, reporter: ShellFileReporter) -> None:
         assert reporter.lines() == SYNTAX_EXAMPLE_EXECUTABLE_LINES
 
-    def test_invalid_syntax_should_be_treated_as_executable(self, resources_dir):
+    def test_invalid_syntax_should_be_treated_as_executable(
+        self, resources_dir: Path
+    ) -> None:
         reporter = ShellFileReporter(str(resources_dir / "invalid_syntax.sh"))
         assert reporter.lines() == {9, 12, 15, 18}
 
-    def test_handle_missing_file(self, tmp_path):
+    def test_handle_missing_file(self, tmp_path: Path) -> None:
         reporter = ShellFileReporter(str(tmp_path / "missing_file.sh"))
         assert reporter.lines() == set()
 
-    def test_handle_binary_file(self, tmp_path):
+    def test_handle_binary_file(self, tmp_path: Path) -> None:
         file_path = tmp_path / "missing_file.sh"
         file_path.write_bytes(bytes.fromhex("348765F32190"))
         reporter = ShellFileReporter(str(file_path))
         assert reporter.lines() == set()
 
-    def test_handle_non_file(self, tmp_path):
+    def test_handle_non_file(self, tmp_path: Path) -> None:
         file_path = tmp_path / "missing_file.sh"
         file_path.mkdir()
         reporter = ShellFileReporter(str(file_path))
         assert reporter.lines() == set()
 
 
-def test_filename_suffix_should_match_pattern():
+def test_filename_suffix_should_match_pattern() -> None:
     suffix = filename_suffix()
     assert re.match(r".+?\.\d+\.[a-zA-Z]+", suffix)
 
 
 class TestCovLineParser:
-    def test_parse_result_matches_reference(self):
+    def test_parse_result_matches_reference(self) -> None:
         parser = CovLineParser()
         for chunk in COVERAGE_LINE_CHUNKS:
             parser.parse(chunk)
@@ -304,7 +310,7 @@ class TestCovLineParser:
 
         assert parser.line_data == COVERAGE_LINE_COVERAGE
 
-    def test_parse_should_raise_for_incomplete_line(self):
+    def test_parse_should_raise_for_incomplete_line(self) -> None:
         parser = CovLineParser()
         with pytest.raises(ValueError, match="could not parse line"):
             parser.parse(
@@ -318,7 +324,7 @@ class TestCoverageParserThread:
             super().__init__()
             self._fifo_path = fifo_path
 
-        def run(self):
+        def run(self) -> None:
             print("writer start")
             with self._fifo_path.open("wb") as fd:
                 for c in COVERAGE_LINE_CHUNKS[0:2]:
@@ -349,7 +355,7 @@ class TestCoverageParserThread:
         def write(self, line_data: LineData) -> None:
             self.line_data.update(line_data)
 
-    def test_lines_should_match_reference(self):
+    def test_lines_should_match_reference(self) -> None:
         parser = self.CovLineParserSpy()
         writer = self.CovWriterFake()
         parser_thread = CoverageParserThread(
@@ -373,7 +379,7 @@ class TestCoverageParserThread:
 
 
 class TestCoverageWriter:
-    def test_write_should_produce_readable_file(self, dummy_project_dir):
+    def test_write_should_produce_readable_file(self, dummy_project_dir: Path) -> None:
         data_file_path = dummy_project_dir.joinpath("coverage-data.db")
         writer = CoverageWriter(data_file_path)
         writer.write(COVERAGE_LINE_COVERAGE)
@@ -391,8 +397,11 @@ class TestCoverageWriter:
             assert cov_db.lines(filename) == sorted(lines)
 
     def test_writer_should_prefer_pytest_cov_env_vars(
-        self, dummy_project_dir, tmp_path, monkeypatch
-    ):
+        self,
+        dummy_project_dir: Path,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         pytest_cov_path = tmp_path / "coverage"
         monkeypatch.setenv("COV_CORE_DATAFILE", str(pytest_cov_path))
 
@@ -413,11 +422,11 @@ class TestPatchedPopen:
     @pytest.mark.parametrize("is_recording", [(True), (False)])
     def test_call_should_execute_example(
         self,
-        is_recording,
-        resources_dir,
-        dummy_project_dir,
-        monkeypatch,
-    ):
+        is_recording: bool,
+        resources_dir: Path,
+        dummy_project_dir: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         monkeypatch.chdir(dummy_project_dir)
 
         cov = None
@@ -451,10 +460,12 @@ class TestPatchedPopen:
 
 class TestMonitorThread:
     class MainThreadStub:
-        def join(self):
+        def join(self) -> None:
             return
 
-    def test_run_should_wait_for_main_thread_join(self, dummy_project_dir):
+    def test_run_should_wait_for_main_thread_join(
+        self, dummy_project_dir: Path
+    ) -> None:
         data_file_path = dummy_project_dir.joinpath("coverage-data.db")
 
         parser_thread = CoverageParserThread(
@@ -470,17 +481,19 @@ class TestMonitorThread:
 
 
 class TestShellPlugin:
-    def test_file_tracer_should_return_null(self):
+    def test_file_tracer_should_return_null(self) -> None:
         plugin = ShellPlugin({})
         assert plugin.file_tracer("foobar") is None
 
-    def test_file_reporter_should_return_instance(self):
+    def test_file_reporter_should_return_instance(self) -> None:
         plugin = ShellPlugin({})
         reporter = plugin.file_reporter("foobar")
         assert isinstance(reporter, ShellFileReporter)
         assert reporter.path == Path("foobar")
 
-    def test_find_executable_files_should_find_shell_files(self, examples_dir):
+    def test_find_executable_files_should_find_shell_files(
+        self, examples_dir: Path
+    ) -> None:
         plugin = ShellPlugin({})
 
         executable_files = plugin.find_executable_files(str(examples_dir))
@@ -489,7 +502,7 @@ class TestShellPlugin:
             examples_dir / "shell-file.weird.suffix",
         ]
 
-    def test_find_executable_files_should_find_symlinks(self, tmp_path):
+    def test_find_executable_files_should_find_symlinks(self, tmp_path: Path) -> None:
         plugin = ShellPlugin({})
 
         foo_file_path = tmp_path.joinpath("foo.sh")
