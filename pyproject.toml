@@ -65,15 +65,16 @@ ignore = [
     "TD", # flake8-todos
     "FIX", #flake8-fixme
     "COM812", "ISC001", # ruff format says these should be disabled
-    "D211", # no-blank-line-before-class -> incompatible with D203
-    "D213", #multi-line-summary-second-line -> incompatible with D212
     "TRY003", # Avoid specifying long messages outside the exception class
     "EM102", # Exception must not use an f-string literal, assign to variable first
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["ANN", "D", "S101", "PLR2004", "N802", "PT015", "B011", "INP001", "FBT001", "T201"]
-"tests/resources/**/*.py" = ["ALL"]
+"tests/**/*.py" = [
+    "S101", # assert statement used
+    "T201", # print statement used
+    "FBT001", # Boolean-typed positional argument in function definition
+]
 
 [tool.mypy]
 strict = true
