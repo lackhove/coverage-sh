@@ -62,6 +62,7 @@ class ShellFileReporter(FileReporter):
         self.path = Path(filename)
         self._content: str | None = None
         self._executable_lines: set[int] = set()
+        self._translate_lines: dict[int, int] = {}
         self._parser = Parser(Language(tree_sitter_bash.language()))
 
     def source(self) -> str:
@@ -87,6 +88,12 @@ class ShellFileReporter(FileReporter):
         self._parse_ast(tree.root_node)
 
         return self._executable_lines
+
+    def translate_lines(self, input_lines: Iterable[TLineNo]) -> set[TLineNo]:
+        result: set[TLineNo] = set()
+        for index in input_lines:
+            result.add(self._translate_lines.get(index, index))
+        return result
 
 
 def filename_suffix() -> str:
