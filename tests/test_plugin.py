@@ -470,7 +470,7 @@ class TestMonitorThread:
 
 
 class TestShellPlugin:
-    def test_file_tracer_should_return_None(self):
+    def test_file_tracer_should_return_null(self):
         plugin = ShellPlugin({})
         assert plugin.file_tracer("foobar") is None
 
