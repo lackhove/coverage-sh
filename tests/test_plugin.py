@@ -301,6 +301,12 @@ class TestShellFileReporter:
         reporter = ShellFileReporter(str(file_path))
         assert reporter.lines() == set()
 
+    def test_translate_multi_line(self, reporter: ShellFileReporter) -> None:
+        # ensure parsing happens:
+        reporter.lines()
+        assert reporter.translate_lines([67, 68]) == {67}
+        assert reporter.translate_lines([69, 70, 71]) == {69}
+
 
 def test_filename_suffix_should_match_pattern() -> None:
     suffix = filename_suffix()
