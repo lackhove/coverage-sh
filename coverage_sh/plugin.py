@@ -78,7 +78,13 @@ class ShellFileReporter(FileReporter):
 
     def _parse_ast(self, node: Node) -> None:
         if node.is_named and node.type in EXECUTABLE_NODE_TYPES:
-            self._executable_lines.add(node.start_point[0] + 1)
+            sline = node.start_point.row + 1
+            eline = node.end_point.row + 1
+            self._executable_lines.add(sline)
+            # for multi-line commands translate to the first line
+            if sline != eline and node.type == "command":
+                for index in range(sline + 1, eline + 1):
+                    self._translate_lines[index] = sline
 
         for child in node.children:
             self._parse_ast(child)
