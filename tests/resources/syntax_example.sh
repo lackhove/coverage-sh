@@ -63,3 +63,10 @@ case $fruit in
     echo "Unknown fruit."
     ;;
 esac
+
+echo multi \
+    line
+echo \
+    multi \
+    line \
+    again

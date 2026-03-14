@@ -54,6 +54,8 @@ SYNTAX_EXAMPLE_EXECUTABLE_LINES = {
     57,
     60,
     63,
+    67,
+    69,
 }
 
 SYNTAX_EXAMPLE_STDOUT = (
@@ -69,6 +71,8 @@ SYNTAX_EXAMPLE_STDOUT = (
     "5 + 3 = 8\n"
     "This is a sample file.\n"
     "You selected a banana.\n"
+    "multi line\n"
+    "multi line again\n"
 )
 SYNTAX_EXAMPLE_COVERED_LINES = [
     12,
@@ -90,7 +94,10 @@ SYNTAX_EXAMPLE_COVERED_LINES = [
     51,
     52,
     57,
+    67,
+    69,
 ]
+SYNTAX_EXAMPLE_MEASURED_LINES = [*SYNTAX_EXAMPLE_COVERED_LINES[:-2], 67, 70]
 SYNTAX_EXAMPLE_MISSING_LINES = [
     21,
     54,
@@ -184,8 +191,20 @@ def test_end2end(
     assert len(list(Path().glob(f".coverage.sh.{gethostname()}.*"))) == 1
 
     subprocess.check_call([sys.executable, "-m", "coverage", "combine"])
+
+    # read coverage data directly to examine measured lines
+    cov_data = coverage.CoverageData(basename=".coverage", suffix="")
+    cov_data.read()
+    assert Path(cov_data.data_filename()).name == ".coverage"
+    syntax_example_cov_path = str(Path("syntax_example.sh").absolute())
+    assert syntax_example_cov_path in cov_data.measured_files()
+    cov_measured_lines = cov_data.lines(str(syntax_example_cov_path))
+    assert cov_measured_lines == SYNTAX_EXAMPLE_MEASURED_LINES
+
+    # report in HTML, for visual reference
     subprocess.check_call([sys.executable, "-m", "coverage", "html"])
 
+    # report in JSON, for detailed check
     subprocess.check_call([sys.executable, "-m", "coverage", "json"])
 
     coverage_json = json.loads(Path("coverage.json").read_text())
@@ -299,6 +318,12 @@ class TestShellFileReporter:
         file_path.mkdir()
         reporter = ShellFileReporter(str(file_path))
         assert reporter.lines() == set()
+
+    def test_translate_multi_line(self, reporter: ShellFileReporter) -> None:
+        # ensure parsing happens:
+        reporter.lines()
+        assert reporter.translate_lines([67, 68]) == {67}
+        assert reporter.translate_lines([69, 70, 71]) == {69}
 
 
 def test_filename_suffix_should_match_pattern() -> None:

@@ -64,6 +64,7 @@ class ShellFileReporter(FileReporter):
         self.path = Path(filename)
         self._content: str | None = None
         self._executable_lines: set[int] = set()
+        self._translate_lines: dict[int, int] = {}
         self._parser = Parser(Language(tree_sitter_bash.language()))
 
     def source(self) -> str:
@@ -79,7 +80,13 @@ class ShellFileReporter(FileReporter):
 
     def _parse_ast(self, node: Node) -> None:
         if node.is_named and node.type in EXECUTABLE_NODE_TYPES:
-            self._executable_lines.add(node.start_point[0] + 1)
+            sline = node.start_point.row + 1
+            eline = node.end_point.row + 1
+            self._executable_lines.add(sline)
+            # for multi-line commands translate to the first line
+            if sline != eline and node.type == "command":
+                for index in range(sline + 1, eline + 1):
+                    self._translate_lines[index] = sline
 
         for child in node.children:
             self._parse_ast(child)
@@ -89,6 +96,12 @@ class ShellFileReporter(FileReporter):
         self._parse_ast(tree.root_node)
 
         return self._executable_lines
+
+    def translate_lines(self, input_lines: Iterable[TLineNo]) -> set[TLineNo]:
+        result: set[TLineNo] = set()
+        for index in input_lines:
+            result.add(self._translate_lines.get(index, index))
+        return result
 
 
 def filename_suffix() -> str:
