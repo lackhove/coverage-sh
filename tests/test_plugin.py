@@ -54,6 +54,8 @@ SYNTAX_EXAMPLE_EXECUTABLE_LINES = {
     57,
     60,
     63,
+    67,
+    69,
 }
 
 SYNTAX_EXAMPLE_STDOUT = (
@@ -69,6 +71,8 @@ SYNTAX_EXAMPLE_STDOUT = (
     "5 + 3 = 8\n"
     "This is a sample file.\n"
     "You selected a banana.\n"
+    "multi line\n"
+    "multi line again\n"
 )
 SYNTAX_EXAMPLE_COVERED_LINES = [
     12,
@@ -90,6 +94,8 @@ SYNTAX_EXAMPLE_COVERED_LINES = [
     51,
     52,
     57,
+    67,
+    69,
 ]
 SYNTAX_EXAMPLE_MISSING_LINES = [
     21,
