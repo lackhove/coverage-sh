@@ -173,7 +173,10 @@ def test_end2end(
         check=True,
         timeout=2,
     )
-    assert proc.stderr == ""
+
+    if sys.version_info < (3, 14):
+        # we raise a warning when sysmon run.core is set to sysmon, which is the default since 3.14
+        assert proc.stderr == ""
     assert proc.stdout == END2END_STDOUT
     assert proc.returncode == 0
 
@@ -244,7 +247,9 @@ patch = ["subprocess"]
         check=True,
         timeout=2,
     )
-    assert proc.stderr == ""
+    if sys.version_info < (3, 14):
+        # we raise a warning when sysmon run.core is set to sysmon, which is the default since 3.14
+        assert proc.stderr == ""
     assert proc.stdout == END2END_STDOUT
     subprocess.check_call([sys.executable, "-m", "coverage", "combine"])
     subprocess.check_call([sys.executable, "-m", "coverage", "json"])

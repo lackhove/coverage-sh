@@ -10,6 +10,7 @@ import selectors
 import stat
 import string
 import subprocess
+import sys
 import threading
 from collections import defaultdict
 from pathlib import Path
@@ -17,6 +18,7 @@ from random import Random
 from socket import gethostname
 from time import sleep
 from typing import TYPE_CHECKING, Any, cast
+from warnings import warn
 
 import coverage
 import magic
@@ -312,6 +314,16 @@ class ShellPlugin(CoveragePlugin):
     def configure(self, config: TConfigurable) -> None:
         data_file_option = config.get_option("run:data_file")
         coverage_data_path = Path(cast("str", data_file_option)).absolute()
+
+        if config.get_option("run:core") == "sysmon" or (
+            sys.version_info >= (3, 14) and config.get_option("run:core") is None
+        ):
+            warn(
+                "The sysmon tracer is not supported by coverage-sh, falling back to ctrace. "
+                "Please set [run] core = ctrace in your configuration to silence this warning.",
+                stacklevel=2,
+            )
+            config.set_option("run:core", "ctrace")
 
         if self.options.get("cover_always", False):
             parser_thread = CoverageParserThread(
