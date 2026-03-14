@@ -1,3 +1,4 @@
 [tool.coverage.run]
 plugins = [ "coverage_sh" ]
 source = ["."]
+parallel = true

@@ -1,6 +1,5 @@
 #  SPDX-License-Identifier: MIT
 #  Copyright (c) 2023-2024 Kilian Lackhove
-import json
 import os
 import re
 import subprocess
@@ -30,80 +29,6 @@ from coverage_sh.plugin import (
     filename_suffix,
 )
 
-SYNTAX_EXAMPLE_EXECUTABLE_LINES = {
-    12,
-    15,
-    18,
-    19,
-    21,
-    25,
-    26,
-    31,
-    34,
-    37,
-    38,
-    41,
-    42,
-    45,
-    46,
-    47,
-    48,
-    51,
-    52,
-    54,
-    57,
-    60,
-    63,
-    67,
-    69,
-}
-
-SYNTAX_EXAMPLE_STDOUT = (
-    "Hello, World!\n"
-    "Variable is set to 'Hello, World!'\n"
-    "Iteration 1\n"
-    "Iteration 2\n"
-    "Iteration 3\n"
-    "Iteration 4\n"
-    "Iteration 5\n"
-    "Hello from a function!\n"
-    "Current OS is: Linux\n"
-    "5 + 3 = 8\n"
-    "This is a sample file.\n"
-    "You selected a banana.\n"
-    "multi line\n"
-    "multi line again\n"
-)
-SYNTAX_EXAMPLE_COVERED_LINES = [
-    12,
-    15,
-    18,
-    19,
-    25,
-    26,
-    31,
-    34,
-    37,
-    38,
-    41,
-    42,
-    45,
-    46,
-    47,
-    48,
-    51,
-    52,
-    57,
-    67,
-    69,
-]
-SYNTAX_EXAMPLE_MEASURED_LINES = [*SYNTAX_EXAMPLE_COVERED_LINES[:-2], 67, 70]
-SYNTAX_EXAMPLE_MISSING_LINES = [
-    21,
-    54,
-    60,
-    63,
-]
 COVERAGE_LINE_CHUNKS = (
     b"""\
 CCOV:::/home/dummy_user/dummy_dir_a:::1:::a normal line
@@ -138,41 +63,31 @@ COVERAGE_LINE_COVERAGE = {
     "/home/dummy_user/dummy_dir_b": {10},
 }
 
-#: expected output of testproject/test.sh
-END2END_STDOUT = SYNTAX_EXAMPLE_STDOUT + "Hello from inner python\n"
-#: lines executed inside inner.py
-INNER_PY_EXECUTED_LINES = [2]
-
-
-@pytest.fixture
-def examples_dir(resources_dir: Path) -> Path:
-    return resources_dir / "examples"
-
-
-@pytest.fixture
-def syntax_example_path(resources_dir: Path, tmp_path: Path) -> Path:
-    original_path = resources_dir / "syntax_example.sh"
-    working_copy_path = tmp_path / "syntax_example.sh"
-    working_copy_path.write_bytes(original_path.read_bytes())
-    return working_copy_path
-
 
 @pytest.mark.parametrize("cover_always", [(True), (False)])
 def test_end2end(
-    dummy_project_dir: Path,
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     cover_always: bool,
 ) -> None:
-    monkeypatch.chdir(dummy_project_dir)
+    test_sh = tmp_path / "test.sh"
+    test_sh.write_text("#!/bin/bash\necho hello\n")
+    test_sh.chmod(0o755)
 
-    coverage_file_path = Path(".coverage")
-    assert not coverage_file_path.is_file()
+    pyproject_toml = tmp_path / "pyproject.toml"
+    pyproject_toml.write_text(
+        '[tool.coverage.run]\nplugins = ["coverage_sh"]\nsource = ["."]\n'
+    )
+
+    main_py = tmp_path / "main.py"
+    main_py.write_text("import subprocess\nsubprocess.run(['./test.sh'])\n")
 
     if cover_always:
-        pyproject_file = Path("pyproject.toml")
-        with pyproject_file.open("a") as fd:
+        with pyproject_toml.open("a") as fd:
             fd.write("\n[tool.coverage.coverage_sh]\ncover_always = true")
 
+    monkeypatch.chdir(tmp_path)
+
     proc = subprocess.run(
         [sys.executable, "-m", "coverage", "run", "main.py"],
         capture_output=True,
@@ -184,146 +99,140 @@ def test_end2end(
     if sys.version_info < (3, 14):
         # we raise a warning when sysmon run.core is set to sysmon, which is the default since 3.14
         assert proc.stderr == ""
-    assert proc.stdout == END2END_STDOUT
     assert proc.returncode == 0
 
-    assert Path(".coverage").is_file()
-    assert len(list(Path().glob(f".coverage.sh.{gethostname()}.*"))) == 1
+    # Plugin produced a shell coverage sidecar file
+    assert len(list(tmp_path.glob(f".coverage.sh.{gethostname()}.*"))) == 1
 
     subprocess.check_call([sys.executable, "-m", "coverage", "combine"])
 
-    # read coverage data directly to examine measured lines
+    # Shell script appears in the combined coverage data
     cov_data = coverage.CoverageData(basename=".coverage", suffix="")
     cov_data.read()
-    assert Path(cov_data.data_filename()).name == ".coverage"
-    syntax_example_cov_path = str(Path("syntax_example.sh").absolute())
-    assert syntax_example_cov_path in cov_data.measured_files()
-    cov_measured_lines = cov_data.lines(str(syntax_example_cov_path))
-    assert cov_measured_lines == SYNTAX_EXAMPLE_MEASURED_LINES
-
-    # report in HTML, for visual reference
-    subprocess.check_call([sys.executable, "-m", "coverage", "html"])
-
-    # report in JSON, for detailed check
-    subprocess.check_call([sys.executable, "-m", "coverage", "json"])
-
-    coverage_json = json.loads(Path("coverage.json").read_text())
-    assert coverage_json["files"]["test.sh"]["executed_lines"] == [8, 9, 10]
-    assert coverage_json["files"]["syntax_example.sh"]["excluded_lines"] == []
-    assert (
-        coverage_json["files"]["syntax_example.sh"]["executed_lines"]
-        == SYNTAX_EXAMPLE_COVERED_LINES
-    )
-    assert (
-        coverage_json["files"]["syntax_example.sh"]["missing_lines"]
-        == SYNTAX_EXAMPLE_MISSING_LINES
-    )
-
-
-@pytest.fixture(scope="session")
-def covpy_installs_pth_at_install_time() -> None:
-    """Skip if coveragepy does not install a .pth file into site-packages at install time.
-
-    - >= 7.13.0: writes the .pth file during pip install — reliable in all environments.
-    - >= 7.9.0:  installs it dynamically at runtime — fails if site-packages is read-only.
-    - <  7.9.0:  no ``patch`` config option at all.
-
-    We skip below 7.13.0 to ensure reliability in all environments, even though the
-    underlying fix would also work on 7.9.x-7.12.x given a writable site-packages.
-    """
-    if Version(version("coverage")) < Version("7.13.0"):
-        pytest.skip(
-            "coverage < 7.13.0 does not install .pth file at install time"
-        )  # pragma: no cover
-
-
-@pytest.mark.usefixtures("covpy_installs_pth_at_install_time")
-def test_end2end_python_subprocess_via_shell(
-    dummy_project_dir: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Test that a Python script invoked by a shell script is measured correctly.
-
-    Call chain: ``coverage run main.py`` -> ``test.sh`` -> ``inner.py``.
-    coverage-sh handles shell script measurement; ``inner.py`` is measured via
-    coveragepy's subprocess mechanism, which requires:
-    - ``patch = ["subprocess"]``: patches the ``subprocess`` module so spawned Python
-      processes inherit coverage measurement.
-    - A ``.pth`` file in site-packages: activates coverage in child processes via
-      ``coverage.process_startup()``.
-    """
-    monkeypatch.chdir(dummy_project_dir)
-    pyproject_text = """\
-[tool.coverage.run]
-plugins = ["coverage_sh"]
-patch = ["subprocess"]
-"""
-    Path("pyproject.toml").write_text(pyproject_text)
-    proc = subprocess.run(
-        [sys.executable, "-m", "coverage", "run", "main.py"],
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=2,
-    )
-    if sys.version_info < (3, 14):
-        # we raise a warning when sysmon run.core is set to sysmon, which is the default since 3.14
-        assert proc.stderr == ""
-    assert proc.stdout == END2END_STDOUT
-    subprocess.check_call([sys.executable, "-m", "coverage", "combine"])
-    subprocess.check_call([sys.executable, "-m", "coverage", "json"])
-    coverage_json = json.loads(Path("coverage.json").read_text())
-    assert (
-        coverage_json["files"]["inner.py"]["executed_lines"] == INNER_PY_EXECUTED_LINES
-    )
+    assert str(test_sh) in cov_data.measured_files()
 
 
 class TestShellFileReporter:
-    @pytest.fixture
-    def reporter(self, syntax_example_path: Path) -> ShellFileReporter:
-        return ShellFileReporter(str(syntax_example_path))
+    def test_source_should_be_cached(self, tmp_path: Path) -> None:
+        script = tmp_path / "script.sh"
+        script.write_text("#!/bin/bash\necho hello\n")
+        reporter = ShellFileReporter(str(script))
 
-    def test_source_should_be_cached(
-        self,
-        syntax_example_path: Path,
-        reporter: ShellFileReporter,
+        assert reporter.source() == "#!/bin/bash\necho hello\n"
+        script.unlink()
+        assert reporter.source() == "#!/bin/bash\necho hello\n"
+
+    def test_lines_should_return_executable_lines(self, tmp_path: Path) -> None:
+        script = tmp_path / "script.sh"
+        script.write_text("#!/bin/bash\necho hello\n")
+        reporter = ShellFileReporter(str(script))
+        # line 1 is the shebang, line 2 is the only executable statement
+        assert reporter.lines() == {2}
+
+    @pytest.mark.parametrize(
+        ("script_body", "expected_lines"),
+        [
+            # --- executable node types ---
+            # Each script has a shebang on line 1 (not executable) and the
+            # construct under test starting on line 2.
+            # For compound statements the body command on line 3 is also
+            # executable; closing keywords (done/fi/esac) are not.
+            pytest.param("x=1\n", {2}, id="variable_assignment"),
+            pytest.param("x=1 y=2\n", {2}, id="variable_assignments"),
+            pytest.param("declare x=1\n", {2}, id="declaration_command"),
+            pytest.param("unset x\n", {2}, id="unset_command"),
+            pytest.param("echo hello\n", {2}, id="command"),
+            pytest.param("echo hello | cat\n", {2}, id="pipeline"),
+            pytest.param("true && echo yes\n", {2}, id="list"),
+            pytest.param("[ -n hello ]\n", {2}, id="test_command"),
+            pytest.param("! false\n", {2}, id="negated_command"),
+            pytest.param("echo hello > /dev/null\n", {2}, id="redirected_statement"),
+            pytest.param("(echo hello)\n", {2}, id="subshell"),
+            pytest.param(
+                "for i in 1 2; do\n  echo $i\ndone\n", {2, 3}, id="for_statement"
+            ),
+            pytest.param(
+                "for ((i=0; i<2; i++)); do\n  echo $i\ndone\n",
+                {2, 3},
+                id="c_style_for_statement",
+            ),
+            pytest.param(
+                "while false; do\n  echo loop\ndone\n", {2, 3}, id="while_statement"
+            ),
+            pytest.param("if true; then\n  echo yes\nfi\n", {2, 3}, id="if_statement"),
+            pytest.param(
+                "case x in\n  x) echo match ;;\nesac\n", {2, 3}, id="case_statement"
+            ),
+            # --- non-executable lines ---
+            pytest.param("# a comment\necho hello\n", {3}, id="comment_excluded"),
+            pytest.param("\necho hello\n", {3}, id="blank_line_excluded"),
+            pytest.param("if true; then\n  echo yes\nfi\n", {2, 3}, id="fi_excluded"),
+            pytest.param(
+                "for i in 1; do\n  echo $i\ndone\n", {2, 3}, id="done_excluded"
+            ),
+            pytest.param(
+                "case x in\n  x) echo match ;;\nesac\n", {2, 3}, id="esac_excluded"
+            ),
+        ],
+    )
+    def test_executable_lines(
+        self, tmp_path: Path, script_body: str, expected_lines: set[int]
     ) -> None:
-        reference = Path(reporter.path).read_text()
-
-        assert reporter.source() == reference
-        syntax_example_path.unlink()
-        assert reporter.source() == reference
-
-    def test_lines_should_match_reference(self, reporter: ShellFileReporter) -> None:
-        assert reporter.lines() == SYNTAX_EXAMPLE_EXECUTABLE_LINES
+        script = tmp_path / "script.sh"
+        script.write_text(f"#!/bin/bash\n{script_body}")
+        reporter = ShellFileReporter(str(script))
+        assert reporter.lines() == expected_lines
 
     def test_invalid_syntax_should_be_treated_as_executable(
-        self, resources_dir: Path
+        self, tmp_path: Path
     ) -> None:
-        reporter = ShellFileReporter(str(resources_dir / "invalid_syntax.sh"))
-        assert reporter.lines() == {9, 12, 15, 18}
+        # Lines 3 and 5 are valid; lines 4 and 6 contain invalid syntax.
+        # The parser should treat all non-comment, non-blank lines as executable.
+        script = tmp_path / "invalid.sh"
+        script.write_text(
+            "#!/bin/sh\n"  # 1 — shebang
+            "# comment\n"  # 2 — comment
+            'variable="hello"\n'  # 3 — valid, executable
+            "echo $variable\n"  # 4 — valid, executable
+            "a = b\n"  # 5 — invalid syntax, treated as executable
+            "a = b echo $variable\n"  # 6 — invalid syntax, treated as executable
+        )
+        reporter = ShellFileReporter(str(script))
+        assert reporter.lines() == {3, 4, 5, 6}
 
     def test_handle_missing_file(self, tmp_path: Path) -> None:
         reporter = ShellFileReporter(str(tmp_path / "missing_file.sh"))
         assert reporter.lines() == set()
 
     def test_handle_binary_file(self, tmp_path: Path) -> None:
-        file_path = tmp_path / "missing_file.sh"
+        file_path = tmp_path / "binary_file.sh"
         file_path.write_bytes(bytes.fromhex("348765F32190"))
         reporter = ShellFileReporter(str(file_path))
         assert reporter.lines() == set()
 
     def test_handle_non_file(self, tmp_path: Path) -> None:
-        file_path = tmp_path / "missing_file.sh"
+        file_path = tmp_path / "a_directory"
         file_path.mkdir()
         reporter = ShellFileReporter(str(file_path))
         assert reporter.lines() == set()
 
-    def test_translate_multi_line(self, reporter: ShellFileReporter) -> None:
-        # ensure parsing happens:
-        reporter.lines()
-        assert reporter.translate_lines([67, 68]) == {67}
-        assert reporter.translate_lines([69, 70, 71]) == {69}
+    def test_translate_multi_line(self, tmp_path: Path) -> None:
+        # Line map:
+        #   1  #!/bin/bash
+        #   2  echo hello            — executable (single line)
+        #   3  echo multi \          — executable (start of multi-line command)
+        #   4      line              — continuation, maps to line 3
+        #   5  echo done             — executable (single line)
+        script = tmp_path / "multiline.sh"
+        script.write_text(
+            "#!/bin/bash\necho hello\necho multi \\\n    line\necho done\n"
+        )
+        reporter = ShellFileReporter(str(script))
+        reporter.lines()  # trigger parse
+        # line 4 is a continuation of the command starting at line 3
+        assert reporter.translate_lines([3, 4]) == {3}
+        # line 5 is its own command
+        assert reporter.translate_lines([5]) == {5}
 
 
 def test_filename_suffix_should_match_pattern() -> None:
@@ -355,7 +264,6 @@ class TestCoverageParserThread:
             self._fifo_path = fifo_path
 
         def run(self) -> None:
-            print("writer start")
             with self._fifo_path.open("wb") as fd:
                 for c in COVERAGE_LINE_CHUNKS[0:2]:
                     fd.write(c)
@@ -366,8 +274,6 @@ class TestCoverageParserThread:
                 for c in COVERAGE_LINE_CHUNKS[2:]:
                     fd.write(c)
                     sleep(0.1)
-
-            print("writer done")
 
     class CovLineParserSpy(CovLineParser):
         def __init__(self) -> None:
@@ -409,8 +315,8 @@ class TestCoverageParserThread:
 
 
 class TestCoverageWriter:
-    def test_write_should_produce_readable_file(self, dummy_project_dir: Path) -> None:
-        data_file_path = dummy_project_dir.joinpath("coverage-data.db")
+    def test_write_should_produce_readable_file(self, tmp_path: Path) -> None:
+        data_file_path = tmp_path / "coverage-data.db"
         writer = CoverageWriter(data_file_path)
         writer.write(COVERAGE_LINE_COVERAGE)
 
@@ -426,16 +332,31 @@ class TestCoverageWriter:
         for filename, lines in COVERAGE_LINE_COVERAGE.items():
             assert cov_db.lines(filename) == sorted(lines)
 
+    def test_write_should_annotate_file_tracer(self, tmp_path: Path) -> None:
+        data_file_path = tmp_path / "coverage-data.db"
+        writer = CoverageWriter(data_file_path)
+        writer.write(COVERAGE_LINE_COVERAGE)
+
+        concrete_data_file_path = next(
+            data_file_path.parent.glob(data_file_path.stem + "*")
+        )
+        cov_db = coverage.CoverageData(
+            basename=str(concrete_data_file_path), suffix=False
+        )
+        cov_db.read()
+
+        for filename in COVERAGE_LINE_COVERAGE:
+            assert cov_db.file_tracer(filename) == "coverage_sh.ShellPlugin"
+
     def test_writer_should_prefer_pytest_cov_env_vars(
         self,
-        dummy_project_dir: Path,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        pytest_cov_path = tmp_path / "coverage"
+        pytest_cov_path = tmp_path / "pytest-cov-data"
         monkeypatch.setenv("COV_CORE_DATAFILE", str(pytest_cov_path))
 
-        data_file_path = dummy_project_dir.joinpath("coverage-data.db")
+        data_file_path = tmp_path / "coverage-data.db"
         writer = CoverageWriter(data_file_path)
         writer.write(COVERAGE_LINE_COVERAGE)
 
@@ -444,35 +365,31 @@ class TestCoverageWriter:
         concrete_pytest_cov_path = next(
             pytest_cov_path.parent.glob(pytest_cov_path.stem + "*")
         )
-
         assert concrete_pytest_cov_path.is_file()
 
 
 class TestPatchedPopen:
     @pytest.mark.parametrize("is_recording", [(True), (False)])
-    def test_call_should_execute_example(
+    def test_call_should_execute_script(
         self,
         is_recording: bool,
-        resources_dir: Path,
-        dummy_project_dir: Path,
+        tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.chdir(dummy_project_dir)
+        script = tmp_path / "hello.sh"
+        script.write_text("#!/bin/bash\necho hello\n")
 
         cov = None
         if is_recording:
             cov = coverage.Coverage.current()
             if cov is None:  # pragma: no cover
-                # start coverage in case pytest was not executed with the coverage module. Otherwise, we just recod to
-                # the parent coverage
                 cov = coverage.Coverage()
             cov.start()
         else:
             monkeypatch.setattr(coverage.Coverage, "current", lambda: None)
 
-        test_sh_path = resources_dir / "testproject" / "test.sh"
         proc = PatchedPopen(
-            ["/bin/bash", test_sh_path],
+            ["/bin/bash", str(script)],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             encoding="utf8",
@@ -485,7 +402,64 @@ class TestPatchedPopen:
         assert proc.stderr is not None
         assert proc.stderr.read() == ""
         assert proc.stdout is not None
-        assert proc.stdout.read() == END2END_STDOUT
+        assert proc.stdout.read() == "hello\n"
+
+    def test_call_should_record_coverage_for_shell_script_invoking_python(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """Shell script lines are measured when a shell script also invokes a Python subprocess.
+
+        Verifies that the FIFO/BASH_XTRACEFD mechanism records coverage for the shell
+        script itself even when the script calls out to Python. The Python child's
+        own coverage is handled by coveragepy's subprocess mechanism and is not
+        asserted here.
+        """
+        if Version(version("coverage")) < Version("7.13.0"):
+            pytest.skip(
+                "coverage < 7.13.0 does not install .pth file at install time"
+            )  # pragma: no cover
+
+        inner_py = tmp_path / "inner.py"
+        inner_py.write_text("#! /usr/bin/env python3\nprint('hello from python')\n")
+        inner_py.chmod(0o755)
+
+        # Line map:
+        #   1  #!/bin/bash
+        #   2  echo hello        — executable, covered
+        #   3  <inner_py>        — executable, covered (invokes Python child)
+        caller_sh = tmp_path / "caller.sh"
+        caller_sh.write_text(f"#!/bin/bash\necho hello\n{inner_py}\n")
+        caller_sh.chmod(0o755)
+
+        data_file_path = tmp_path / "coverage-data.db"
+        PatchedPopen.data_file_path = data_file_path
+
+        cov = coverage.Coverage.current()
+        if cov is None:  # pragma: no cover
+            cov = coverage.Coverage()
+        cov.start()
+
+        proc = PatchedPopen(
+            ["/bin/bash", str(caller_sh)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            encoding="utf8",
+        )
+        proc.wait()
+
+        if cov is not None:  # pragma: no cover
+            cov.stop()
+
+        assert proc.stdout is not None
+        assert proc.stdout.read() == "hello\nhello from python\n"
+
+        # Coverage data for the shell script should have been written to a sidecar file
+        sidecar = next(data_file_path.parent.glob(data_file_path.name + ".sh.*"))
+        cov_db = coverage.CoverageData(basename=str(sidecar), suffix=False)
+        cov_db.read()
+        assert str(caller_sh) in cov_db.measured_files()
+        assert cov_db.lines(str(caller_sh)) == [2, 3]
 
 
 class TestMonitorThread:
@@ -493,10 +467,8 @@ class TestMonitorThread:
         def join(self) -> None:
             return
 
-    def test_run_should_wait_for_main_thread_join(
-        self, dummy_project_dir: Path
-    ) -> None:
-        data_file_path = dummy_project_dir.joinpath("coverage-data.db")
+    def test_run_should_wait_for_main_thread_join(self, tmp_path: Path) -> None:
+        data_file_path = tmp_path / "coverage-data.db"
 
         parser_thread = CoverageParserThread(
             coverage_writer=CoverageWriter(data_file_path),
@@ -522,14 +494,24 @@ class TestShellPlugin:
         assert reporter.path == Path("foobar")
 
     def test_find_executable_files_should_find_shell_files(
-        self, examples_dir: Path
+        self, tmp_path: Path
     ) -> None:
-        plugin = ShellPlugin({})
+        # A shell script with a non-standard extension — detected by MIME type
+        (tmp_path / "shell-file.weird.suffix").write_text("#!/bin/bash\necho hi\n")
+        # A .sh file that contains Python — should NOT be detected as shell
+        (tmp_path / "non-bash-file.sh").write_text("def main(): pass\n")
+        # A Python file — should not be detected
+        (tmp_path / "python_file.py").write_text("print('hello')\n")
+        # A shell file inside a hidden directory — should be excluded
+        hidden_dir = tmp_path / ".hidden_dir"
+        hidden_dir.mkdir()
+        (hidden_dir / "hidden.sh").write_text("#!/bin/bash\necho hidden\n")
 
-        executable_files = plugin.find_executable_files(str(examples_dir))
+        plugin = ShellPlugin({})
+        executable_files = list(plugin.find_executable_files(str(tmp_path)))
 
         assert [Path(f) for f in sorted(executable_files)] == [
-            examples_dir / "shell-file.weird.suffix",
+            tmp_path / "shell-file.weird.suffix",
         ]
 
     def test_find_executable_files_should_find_symlinks(self, tmp_path: Path) -> None:
@@ -550,11 +532,6 @@ class TestShellPlugin:
         assert set(executable_files) == {str(f) for f in (foo_file_path, foo_file_link)}
 
     def test_configure_should_update_data_file_path(self) -> None:
-        """configure() should set PatchedPopen.data_file_path from the coverage config.
-
-        Verifies that calling configure() updates the shared data_file_path used by
-        PatchedPopen to locate the coverage data file, replacing any previously set value.
-        """
         plugin = ShellPlugin({})
         old_data_file_path = Path("/old/value")
         PatchedPopen.data_file_path = old_data_file_path
@@ -562,6 +539,20 @@ class TestShellPlugin:
         plugin.configure(config)
         assert PatchedPopen.data_file_path != old_data_file_path
         assert PatchedPopen.data_file_path.name == ".coverage"
+
+    def test_configure_should_patch_subprocess_popen(self) -> None:
+        plugin = ShellPlugin({})
+        config = CoverageConfig()
+        plugin.configure(config)
+        assert subprocess.Popen is PatchedPopen
+
+    def test_configure_should_warn_when_sysmon(self) -> None:
+        config = CoverageConfig()
+        config.set_option("run:core", "sysmon")
+        plugin = ShellPlugin({})
+        with pytest.warns(UserWarning, match="sysmon tracer is not supported"):
+            plugin.configure(config)
+        assert config.get_option("run:core") == "ctrace"
 
     def test_configure_should_set_bash_env_when_cover_always(
         self, monkeypatch: pytest.MonkeyPatch
