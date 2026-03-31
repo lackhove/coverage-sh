@@ -487,6 +487,22 @@ class TestPatchedPopen:
         assert proc.stdout is not None
         assert proc.stdout.read() == END2END_STDOUT
 
+    def test_wait_poll_notyet(self) -> None:
+        proc = PatchedPopen(
+            ["/bin/bash", "-c", "read;echo $REPLY"],
+            stdout=subprocess.PIPE,
+            stdin=subprocess.PIPE,
+        )
+        assert proc.poll() is None
+        with pytest.raises(subprocess.TimeoutExpired):
+            proc.wait(0.1)
+        out, err = proc.communicate(b"aaa")
+        assert out == b"aaa\n"
+        assert err is None
+        assert proc.returncode == 0
+        assert proc.poll() == 0
+        assert proc.wait() == 0
+
 
 class TestMonitorThread:
     class MainThreadStub:
