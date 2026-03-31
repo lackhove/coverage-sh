@@ -281,6 +281,35 @@ patch = ["subprocess"]
     )
 
 
+def test_end2end_async_simple(dummy_project_dir: Path) -> None:
+    """
+    Test creating subprocess via asyncio
+
+    This used to hang without PatchedPopen.__del__ patching
+    """
+    argv = [sys.executable, "-m", "coverage", "run", "--parallel", "main_async.py"]
+    proc = subprocess.run(
+        argv,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=END2END_SUBPROCESS_TIMEOUT,
+        cwd=str(dummy_project_dir),
+    )
+    assert proc.stdout == END2END_STDOUT
+    subprocess.check_call(
+        [sys.executable, "-m", "coverage", "combine"],
+        cwd=str(dummy_project_dir),
+    )
+    subprocess.check_call(
+        [sys.executable, "-m", "coverage", "json"],
+        cwd=str(dummy_project_dir),
+    )
+    coverage_json = json.loads(dummy_project_dir.joinpath("coverage.json").read_text())
+    assert coverage_json["files"]["main_async.py"]
+    assert coverage_json["files"]["test.sh"]["executed_lines"] == [8, 9, 10]
+
+
 class TestShellFileReporter:
     @pytest.fixture
     def reporter(self, syntax_example_path: Path) -> ShellFileReporter:
