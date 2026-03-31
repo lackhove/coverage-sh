@@ -286,6 +286,16 @@ class PatchedPopen(OriginalPopen):  # type: ignore[type-arg]
         self._clean_helper()
         return result
 
+    def poll(self) -> int | None:
+        result = super().poll()
+        if result is not None:
+            self._clean_helper()
+        return result
+
+    def __del__(self) -> None:
+        super().__del__()
+        self._clean_helper()
+
     def _clean_helper(self) -> None:
         if self._parser_thread is None:
             return
