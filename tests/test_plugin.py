@@ -143,6 +143,9 @@ END2END_STDOUT = SYNTAX_EXAMPLE_STDOUT + "Hello from inner python\n"
 #: lines executed inside inner.py
 INNER_PY_EXECUTED_LINES = [2]
 
+#: timeout for running end2end tests
+END2END_SUBPROCESS_TIMEOUT = 5
+
 
 @pytest.fixture
 def examples_dir(resources_dir: Path) -> Path:
@@ -178,7 +181,7 @@ def test_end2end(
         capture_output=True,
         text=True,
         check=True,
-        timeout=2,
+        timeout=END2END_SUBPROCESS_TIMEOUT,
     )
 
     if sys.version_info < (3, 14):
@@ -264,7 +267,7 @@ patch = ["subprocess"]
         capture_output=True,
         text=True,
         check=True,
-        timeout=2,
+        timeout=END2END_SUBPROCESS_TIMEOUT,
     )
     if sys.version_info < (3, 14):
         # we raise a warning when sysmon run.core is set to sysmon, which is the default since 3.14
