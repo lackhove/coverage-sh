@@ -1,5 +1,6 @@
 #  SPDX-License-Identifier: MIT
 #  Copyright (c) 2023-2024 Kilian Lackhove
+import io
 import json
 import os
 import re
@@ -7,6 +8,7 @@ import subprocess
 import sys
 import threading
 from collections import defaultdict
+from collections.abc import Iterable
 from importlib.metadata import version
 from pathlib import Path
 from socket import gethostname
@@ -16,6 +18,7 @@ from typing import cast
 import coverage
 import pytest
 from coverage.config import CoverageConfig
+from coverage.debug import DebugControl
 from packaging.version import Version
 
 from coverage_sh.plugin import (
@@ -142,6 +145,18 @@ COVERAGE_LINE_COVERAGE = {
 END2END_STDOUT = SYNTAX_EXAMPLE_STDOUT + "Hello from inner python\n"
 #: lines executed inside inner.py
 INNER_PY_EXECUTED_LINES = [2]
+
+
+class DebugControlString(DebugControl):
+    """A `DebugControl` that writes to a StringIO, for testing."""
+
+    def __init__(self, options: Iterable[str]) -> None:
+        self.io = io.StringIO()
+        super().__init__(options, self.io)
+
+    def get_output(self) -> str:
+        """Get the output text from the `DebugControl`."""
+        return self.io.getvalue()
 
 
 @pytest.fixture
