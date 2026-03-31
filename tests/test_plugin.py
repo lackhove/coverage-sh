@@ -517,6 +517,23 @@ class TestPatchedPopen:
         assert proc.stdout is not None
         assert proc.stdout.read() == END2END_STDOUT
 
+    def test_debug_control(self) -> None:
+        debug = DebugControlString(["patch"])
+        mock_coverage = MagicMock(coverage.Coverage)
+        mock_coverage._debug = debug  # noqa: SLF001
+        with (
+            mock.patch.object(coverage.Coverage, "current", return_value=mock_coverage),
+        ):
+            proc = PatchedPopen(["echo", "hello"], stdout=subprocess.PIPE)
+            out, err = proc.communicate()
+            assert out == b"hello\n"
+            assert err is None
+            assert proc.returncode == 0
+        debug_output = debug.get_output()
+        assert "PatchedPopen: __init__" in debug_output
+        assert "PatchedPopen: wait timeout" in debug_output
+        assert "PatchedPopen: wait result" in debug_output
+
 
 class TestMonitorThread:
     class MainThreadStub:
