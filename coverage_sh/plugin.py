@@ -261,6 +261,16 @@ set -x
     return helper_path
 
 
+def get_coverage_debug(coverage: Coverage) -> DebugControl:
+    """
+    Get the DebugControl instance from the main Coverage object
+
+    This is not exposed through the public API so we this custom helper will
+    read a private attribute
+    """
+    return coverage._debug  # noqa: SLF001
+
+
 # the proper way to do this would be using OriginalPopen[Any] but that is not supported by python 3.8, so we jusrt
 # ignore this for the time being
 class PatchedPopen(OriginalPopen):  # type: ignore[type-arg]
