@@ -14,6 +14,7 @@ from pathlib import Path
 from socket import gethostname
 from time import sleep
 from typing import cast
+from unittest import mock
 from unittest.mock import MagicMock
 
 import coverage
@@ -606,3 +607,26 @@ class TestShellPlugin:
         config = CoverageConfig()
         plugin.configure(config)
         assert os.getenv("BASH_ENV")
+
+    def test_mock_configure_cover_always_debug(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.delenv("BASH_ENV", raising=False)
+        plugin = ShellPlugin({"cover_always": True})
+        debug = DebugControlString(["config"])
+        plugin._debug = debug  # noqa: SLF001
+        with (
+            mock.patch.object(coverage.Coverage, "current", return_value=None),
+            mock.patch("coverage_sh.plugin.CoverageParserThread") as mock_parser_thread,
+            mock.patch("coverage_sh.plugin.CoverageWriter"),
+            mock.patch("coverage_sh.plugin.MonitorThread"),
+        ):
+            config = CoverageConfig()
+            plugin.configure(config)
+        debug_output = debug.get_output()
+        # check DebugControl writes
+        assert "ShellPlugin.configure" in debug_output
+        assert mock_parser_thread.call_count == 1
+        # check DebugControl is passed to CoverageParserThread
+        assert mock_parser_thread.call_args.kwargs["debug"] == debug
