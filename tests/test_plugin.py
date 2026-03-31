@@ -14,6 +14,7 @@ from pathlib import Path
 from socket import gethostname
 from time import sleep
 from typing import cast
+from unittest.mock import MagicMock
 
 import coverage
 import pytest
@@ -421,6 +422,19 @@ class TestCoverageParserThread:
 
         for filename, lines in COVERAGE_LINE_COVERAGE.items():
             assert writer.line_data[filename] == lines
+
+    def test_start_stop_debug(self) -> None:
+        debug = DebugControlString(["shell-helper-thread"])
+        parser_thread = CoverageParserThread(
+            coverage_writer=MagicMock(CoverageWriter),
+            debug=debug,
+        )
+        parser_thread.start()
+        parser_thread.stop()
+        parser_thread.join()
+        debug_output = debug.get_output()
+        assert "CoverageParserThread: start" in debug_output
+        assert "CoverageParserThread: stop" in debug_output
 
 
 class TestCoverageWriter:
