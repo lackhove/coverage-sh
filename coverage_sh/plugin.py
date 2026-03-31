@@ -282,9 +282,9 @@ class PatchedPopen(OriginalPopen):  # type: ignore[type-arg]
         super().__init__(**kwargs)
 
     def wait(self, timeout: float | None = None) -> int:
-        retval = super().wait(timeout)
+        result = super().wait(timeout)
         self._clean_helper()
-        return retval
+        return result
 
     def _clean_helper(self) -> None:
         if self._parser_thread is None:
