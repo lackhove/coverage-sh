@@ -20,10 +20,9 @@ from time import sleep
 from typing import TYPE_CHECKING, Any, cast
 from warnings import warn
 
-import coverage
 import magic
 import tree_sitter_bash
-from coverage import CoveragePlugin, FileReporter, FileTracer
+from coverage import Coverage, CoverageData, CoveragePlugin, FileReporter, FileTracer
 from tree_sitter import Language, Parser
 
 if TYPE_CHECKING:
@@ -163,7 +162,7 @@ class CoverageWriter:
 
     def write(self, line_data: LineData) -> None:
         suffix_ = "sh." + filename_suffix()
-        coverage_data = coverage.CoverageData(
+        coverage_data = CoverageData(
             basename=self._coverage_data_path,
             suffix=suffix_,
             # TODO: set warn, debug and no_disk
@@ -256,7 +255,8 @@ class PatchedPopen(OriginalPopen):  # type: ignore[type-arg]
     data_file_path: Path = Path.cwd()
 
     def __init__(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
-        if coverage.Coverage.current() is None:
+        curcov = Coverage.current()
+        if curcov is None:
             # we are not recording coverage, so just act like the original Popen
             self._parser_thread = None
             super().__init__(*args, **kwargs)
