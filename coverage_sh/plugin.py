@@ -23,6 +23,7 @@ from warnings import warn
 import magic
 import tree_sitter_bash
 from coverage import Coverage, CoverageData, CoveragePlugin, FileReporter, FileTracer
+from coverage.debug import DebugControl, NoDebugging
 from tree_sitter import Language, Parser
 
 if TYPE_CHECKING:
@@ -181,24 +182,33 @@ class CoverageParserThread(threading.Thread):
         coverage_writer: CoverageWriter,
         name: str | None = None,
         parser: CovLineParser | None = None,
+        debug: DebugControl | None = None,
     ) -> None:
         super().__init__(name=name)
         self._keep_running = True
         self._listening = False
         self._parser = parser or CovLineParser()
         self._coverage_writer = coverage_writer
+        self._debug = debug or NoDebugging()
 
         self.fifo_path = TMP_PATH / f"coverage-sh.{filename_suffix()}.pipe"
         with contextlib.suppress(FileNotFoundError):
             self.fifo_path.unlink()
         os.mkfifo(self.fifo_path, mode=stat.S_IRUSR | stat.S_IWUSR)
+        self._debug_write(f"init done fifo_path={self.fifo_path}")
+
+    def _debug_write(self, msg: str) -> None:
+        if self._debug.should("shell-helper-thread"):
+            self._debug.write("CoverageParserThread: " + msg)
 
     def start(self) -> None:
+        self._debug_write("start")
         super().start()
         while not self._listening:
             sleep(0.0001)
 
     def stop(self) -> None:
+        self._debug_write("stop")
         self._keep_running = False
 
     def run(self) -> None:
@@ -214,6 +224,8 @@ class CoverageParserThread(threading.Thread):
             data_incoming = True
             while not eof and (data_incoming or self._keep_running):
                 events = sel.select(timeout=1)
+                if not len(events):
+                    self._debug_write("select timeout, retry ...")
                 data_incoming = len(events) > 0
                 for key, _ in events:
                     buf = os.read(key.fd, 2**10)
