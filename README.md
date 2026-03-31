@@ -72,6 +72,15 @@ starting pytest from coverage , e.g.:
 coverage run -m pytest arg1 arg2 arg3
 ```
 
+## Debug Options
+
+The coverage-sh plugin uses coveragepy debug infrastructure. You can enable debug by setting the `COVERAGE_DEBUG` variable or by running coverage with the `--debug` flag. The following debug options apply to coverage-sh:
+
+* `patch`: logs the patching of subprocess.Popen.
+* `shell-helper-thread`: logs events related to background threads created by coverage_sh
+
+More options are documented in the [coveragepy documentation](https://coverage.readthedocs.io/en/latest/commands/cmd_debug.html#debug-option).
+
 ## License
 
 Licensed under the [MIT License](LICENSE.txt).
