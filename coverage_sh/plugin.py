@@ -345,10 +345,17 @@ class ShellPlugin(CoveragePlugin):
     def __init__(self, options: dict[str, Any]):
         self.options = options
         self._helper_path: None | Path = None
+        self._debug: DebugControl = NoDebugging()
 
     def configure(self, config: TConfigurable) -> None:
         data_file_option = config.get_option("run:data_file")
         coverage_data_path = Path(cast("str", data_file_option)).absolute()
+
+        current_coverage = Coverage.current()
+        if current_coverage is not None:
+            self._debug = get_coverage_debug(current_coverage)
+        if self._debug.should("config"):
+            self._debug.write("ShellPlugin.configure")
 
         if config.get_option("run:core") == "sysmon" or (
             sys.version_info >= (3, 14) and config.get_option("run:core") is None
@@ -364,6 +371,7 @@ class ShellPlugin(CoveragePlugin):
             parser_thread = CoverageParserThread(
                 coverage_writer=CoverageWriter(coverage_data_path),
                 name=f"CoverageParserThread({coverage_data_path!s})",
+                debug=self._debug,
             )
             parser_thread.start()
 
