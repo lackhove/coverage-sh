@@ -283,15 +283,16 @@ class PatchedPopen(OriginalPopen):  # type: ignore[type-arg]
 
     def wait(self, timeout: float | None = None) -> int:
         retval = super().wait(timeout)
-        if self._parser_thread is None:
-            # no coverage recording was active during __init__
-            return retval
+        self._clean_helper()
+        return retval
 
+    def _clean_helper(self) -> None:
+        if self._parser_thread is None:
+            return
         self._parser_thread.stop()
         self._parser_thread.join()
         with contextlib.suppress(FileNotFoundError):
             self._helper_path.unlink()
-        return retval
 
 
 class MonitorThread(threading.Thread):
