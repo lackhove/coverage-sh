@@ -275,14 +275,24 @@ def get_coverage_debug(coverage: Coverage) -> DebugControl:
 # ignore this for the time being
 class PatchedPopen(OriginalPopen):  # type: ignore[type-arg]
     data_file_path: Path = Path.cwd()
+    _debug: DebugControl
 
     def __init__(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
         curcov = Coverage.current()
         if curcov is None:
             # we are not recording coverage, so just act like the original Popen
             self._parser_thread = None
+            self._debug = NoDebugging()
             super().__init__(*args, **kwargs)
             return
+
+        # minimal init for __repr__ to work for COVERAGE_DEBUG=self
+        self.returncode = None
+        self.args = args
+
+        # initialize debug control
+        self._debug = debug = get_coverage_debug(curcov)
+        self._debug_write("__init__")
 
         # convert args into kwargs
         sig = inspect.signature(subprocess.Popen)
@@ -291,6 +301,7 @@ class PatchedPopen(OriginalPopen):  # type: ignore[type-arg]
         self._parser_thread = CoverageParserThread(
             coverage_writer=CoverageWriter(coverage_data_path=self.data_file_path),
             name="CoverageParserThread(None)",
+            debug=debug,
         )
         self._parser_thread.start()
 
@@ -304,7 +315,9 @@ class PatchedPopen(OriginalPopen):  # type: ignore[type-arg]
         super().__init__(**kwargs)
 
     def wait(self, timeout: float | None = None) -> int:
+        self._debug_write(f"wait timeout={timeout}")
         retval = super().wait(timeout)
+        self._debug_write(f"wait result={retval}")
         if self._parser_thread is None:
             # no coverage recording was active during __init__
             return retval
@@ -314,6 +327,10 @@ class PatchedPopen(OriginalPopen):  # type: ignore[type-arg]
         with contextlib.suppress(FileNotFoundError):
             self._helper_path.unlink()
         return retval
+
+    def _debug_write(self, msg: str) -> None:
+        if self._debug.should("patch"):
+            self._debug.write("PatchedPopen: " + msg)
 
 
 class MonitorThread(threading.Thread):
