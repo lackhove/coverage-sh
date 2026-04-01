@@ -23,12 +23,12 @@ from warnings import warn
 import magic
 import tree_sitter_bash
 from coverage import Coverage, CoverageData, CoveragePlugin, FileReporter, FileTracer
-from coverage.debug import DebugControl, NoDebugging
 from tree_sitter import Language, Parser
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
 
+    from coverage.debug import DebugControl
     from coverage.types import TConfigurable, TLineNo
     from tree_sitter import Node
 
@@ -55,6 +55,28 @@ EXECUTABLE_NODE_TYPES = {
     "list",
 }
 SUPPORTED_MIME_TYPES = {"text/x-shellscript"}
+
+PLUGIN_DEBUG_OPTION = "shell"
+
+
+def debug_write(msg: str, debug_control: DebugControl | None = None) -> None:
+
+    current_coverage = Coverage.current()
+    if current_coverage is None and debug_control is None:
+        # we are not recording coverage, so we have nowhere to send the message
+        return
+
+    # DebugControl.write expects to be called from a frame with a "self" variable, so
+    # we use the same code to fetch that and pass it down to emulate that behavior
+    self = inspect.stack()[1][0].f_locals.get("self")  # noqa: F841
+
+    try:
+        debug_control = debug_control or Coverage.current()._debug  # type: ignore[union-attr]  # noqa: SLF001
+
+        if debug_control.should(PLUGIN_DEBUG_OPTION):
+            debug_control.write(msg)
+    except Exception as e:  # noqa: BLE001
+        warn(f'Failed to log debug message: "{msg}": {e}', stacklevel=2)
 
 
 class ShellFileReporter(FileReporter):
@@ -182,33 +204,29 @@ class CoverageParserThread(threading.Thread):
         coverage_writer: CoverageWriter,
         name: str | None = None,
         parser: CovLineParser | None = None,
-        debug: DebugControl | None = None,
     ) -> None:
         super().__init__(name=name)
         self._keep_running = True
         self._listening = False
         self._parser = parser or CovLineParser()
         self._coverage_writer = coverage_writer
-        self._debug = debug or NoDebugging()
 
         self.fifo_path = TMP_PATH / f"coverage-sh.{filename_suffix()}.pipe"
         with contextlib.suppress(FileNotFoundError):
             self.fifo_path.unlink()
         os.mkfifo(self.fifo_path, mode=stat.S_IRUSR | stat.S_IWUSR)
-        self._debug_write(f"init done fifo_path={self.fifo_path}")
-
-    def _debug_write(self, msg: str) -> None:
-        if self._debug.should("shell-helper-thread"):
-            self._debug.write("CoverageParserThread: " + msg)
+        debug_write(
+            f"init done fifo_path={self.fifo_path}",
+        )
 
     def start(self) -> None:
-        self._debug_write("start")
+        debug_write("start")
         super().start()
         while not self._listening:
             sleep(0.0001)
 
     def stop(self) -> None:
-        self._debug_write("stop")
+        debug_write("stop")
         self._keep_running = False
 
     def run(self) -> None:
@@ -225,7 +243,9 @@ class CoverageParserThread(threading.Thread):
             while not eof and (data_incoming or self._keep_running):
                 events = sel.select(timeout=1)
                 if not len(events):
-                    self._debug_write("select timeout, retry ...")
+                    debug_write(
+                        "select timeout, retry ...",
+                    )
                 data_incoming = len(events) > 0
                 for key, _ in events:
                     buf = os.read(key.fd, 2**10)
@@ -261,28 +281,15 @@ set -x
     return helper_path
 
 
-def get_coverage_debug(coverage: Coverage) -> DebugControl:
-    """
-    Get the DebugControl instance from the main Coverage object
-
-    This is not exposed through the public API so we this custom helper will
-    read a private attribute
-    """
-    return coverage._debug  # noqa: SLF001
-
-
 # the proper way to do this would be using OriginalPopen[Any] but that is not supported by python 3.8, so we jusrt
 # ignore this for the time being
 class PatchedPopen(OriginalPopen):  # type: ignore[type-arg]
     data_file_path: Path = Path.cwd()
-    _debug: DebugControl
 
     def __init__(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
-        curcov = Coverage.current()
-        if curcov is None:
+        if Coverage.current() is None:
             # we are not recording coverage, so just act like the original Popen
             self._parser_thread = None
-            self._debug = NoDebugging()
             super().__init__(*args, **kwargs)
             return
 
@@ -290,9 +297,7 @@ class PatchedPopen(OriginalPopen):  # type: ignore[type-arg]
         self.returncode = None
         self.args = args
 
-        # initialize debug control
-        self._debug = debug = get_coverage_debug(curcov)
-        self._debug_write("__init__")
+        debug_write("__init__")
 
         # convert args into kwargs
         sig = inspect.signature(subprocess.Popen)
@@ -301,7 +306,6 @@ class PatchedPopen(OriginalPopen):  # type: ignore[type-arg]
         self._parser_thread = CoverageParserThread(
             coverage_writer=CoverageWriter(coverage_data_path=self.data_file_path),
             name="CoverageParserThread(None)",
-            debug=debug,
         )
         self._parser_thread.start()
 
@@ -315,9 +319,9 @@ class PatchedPopen(OriginalPopen):  # type: ignore[type-arg]
         super().__init__(**kwargs)
 
     def wait(self, timeout: float | None = None) -> int:
-        self._debug_write(f"wait timeout={timeout}")
+        debug_write(f"wait timeout={timeout}")
         retval = super().wait(timeout)
-        self._debug_write(f"wait result={retval}")
+        debug_write(f"wait result={retval}")
         if self._parser_thread is None:
             # no coverage recording was active during __init__
             return retval
@@ -327,10 +331,6 @@ class PatchedPopen(OriginalPopen):  # type: ignore[type-arg]
         with contextlib.suppress(FileNotFoundError):
             self._helper_path.unlink()
         return retval
-
-    def _debug_write(self, msg: str) -> None:
-        if self._debug.should("patch"):
-            self._debug.write("PatchedPopen: " + msg)
 
 
 class MonitorThread(threading.Thread):
@@ -362,17 +362,10 @@ class ShellPlugin(CoveragePlugin):
     def __init__(self, options: dict[str, Any]):
         self.options = options
         self._helper_path: None | Path = None
-        self._debug: DebugControl = NoDebugging()
 
     def configure(self, config: TConfigurable) -> None:
         data_file_option = config.get_option("run:data_file")
         coverage_data_path = Path(cast("str", data_file_option)).absolute()
-
-        current_coverage = Coverage.current()
-        if current_coverage is not None:
-            self._debug = get_coverage_debug(current_coverage)
-        if self._debug.should("config"):
-            self._debug.write("ShellPlugin.configure")
 
         if config.get_option("run:core") == "sysmon" or (
             sys.version_info >= (3, 14) and config.get_option("run:core") is None
@@ -388,7 +381,6 @@ class ShellPlugin(CoveragePlugin):
             parser_thread = CoverageParserThread(
                 coverage_writer=CoverageWriter(coverage_data_path),
                 name=f"CoverageParserThread({coverage_data_path!s})",
-                debug=self._debug,
             )
             parser_thread.start()
 

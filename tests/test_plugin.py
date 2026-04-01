@@ -14,8 +14,6 @@ from pathlib import Path
 from socket import gethostname
 from time import sleep
 from typing import cast
-from unittest import mock
-from unittest.mock import MagicMock
 
 import coverage
 import pytest
@@ -32,6 +30,7 @@ from coverage_sh.plugin import (
     PatchedPopen,
     ShellFileReporter,
     ShellPlugin,
+    debug_write,
     filename_suffix,
 )
 
@@ -237,6 +236,46 @@ def test_end2end(
     )
 
 
+class TestDebugWrite:
+    def test_should_not_log_when_dsabled(self) -> None:
+        debug_control = DebugControlString([])
+        # we need a variable named `self` in the caller frame that is of a known type
+        self = ShellPlugin({})  # type: ignore[assignment] # noqa: F841, PLW0642
+
+        debug_write("foo", debug_control)
+
+        assert debug_control.get_output() == ""
+
+    def test_should_log_when_enabled(self) -> None:
+        debug_control = DebugControlString(["shell"])
+        # we need a variable named `self` in the caller frame that is of a known type
+        self = ShellPlugin({})  # type: ignore[assignment] # noqa: F841, PLW0642
+
+        debug_write("foo", debug_control)
+
+        assert debug_control.get_output() == "foo\n"
+
+    def test_should_log_self_when_enabled(self) -> None:
+        debug_control = DebugControlString(["self", "shell"])
+        # we need a variable named `self` in the caller frame that is of a known type
+        self = ShellPlugin({})  # type: ignore[assignment] # noqa: F841, PLW0642
+
+        debug_write("foo", debug_control)
+
+        assert (
+            "self: <coverage_sh.plugin.ShellPlugin object" in debug_control.get_output()
+        )
+
+    def test_should_log_callers_when_enabled(self) -> None:
+        debug_control = DebugControlString(["self", "callers", "shell"])
+        # we need a variable named `self` in the caller frame that is of a known type
+        self = ShellPlugin({})  # type: ignore[assignment] # noqa: F841, PLW0642
+
+        debug_write("foo", debug_control)
+
+        assert "test_should_log_callers_when_enabled" in debug_control.get_output()
+
+
 @pytest.fixture(scope="session")
 def covpy_installs_pth_at_install_time() -> None:
     """Skip if coveragepy does not install a .pth file into site-packages at install time.
@@ -424,19 +463,6 @@ class TestCoverageParserThread:
         for filename, lines in COVERAGE_LINE_COVERAGE.items():
             assert writer.line_data[filename] == lines
 
-    def test_start_stop_debug(self) -> None:
-        debug = DebugControlString(["shell-helper-thread"])
-        parser_thread = CoverageParserThread(
-            coverage_writer=MagicMock(CoverageWriter),
-            debug=debug,
-        )
-        parser_thread.start()
-        parser_thread.stop()
-        parser_thread.join()
-        debug_output = debug.get_output()
-        assert "CoverageParserThread: start" in debug_output
-        assert "CoverageParserThread: stop" in debug_output
-
 
 class TestCoverageWriter:
     def test_write_should_produce_readable_file(self, dummy_project_dir: Path) -> None:
@@ -516,23 +542,6 @@ class TestPatchedPopen:
         assert proc.stderr.read() == ""
         assert proc.stdout is not None
         assert proc.stdout.read() == END2END_STDOUT
-
-    def test_debug_control(self) -> None:
-        debug = DebugControlString(["patch"])
-        mock_coverage = MagicMock(coverage.Coverage)
-        mock_coverage._debug = debug  # noqa: SLF001
-        with (
-            mock.patch.object(coverage.Coverage, "current", return_value=mock_coverage),
-        ):
-            proc = PatchedPopen(["echo", "hello"], stdout=subprocess.PIPE)
-            out, err = proc.communicate()
-            assert out == b"hello\n"
-            assert err is None
-            assert proc.returncode == 0
-        debug_output = debug.get_output()
-        assert "PatchedPopen: __init__" in debug_output
-        assert "PatchedPopen: wait timeout" in debug_output
-        assert "PatchedPopen: wait result" in debug_output
 
 
 class TestMonitorThread:
@@ -624,26 +633,3 @@ class TestShellPlugin:
         config = CoverageConfig()
         plugin.configure(config)
         assert os.getenv("BASH_ENV")
-
-    def test_mock_configure_cover_always_debug(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        monkeypatch.delenv("BASH_ENV", raising=False)
-        plugin = ShellPlugin({"cover_always": True})
-        debug = DebugControlString(["config"])
-        plugin._debug = debug  # noqa: SLF001
-        with (
-            mock.patch.object(coverage.Coverage, "current", return_value=None),
-            mock.patch("coverage_sh.plugin.CoverageParserThread") as mock_parser_thread,
-            mock.patch("coverage_sh.plugin.CoverageWriter"),
-            mock.patch("coverage_sh.plugin.MonitorThread"),
-        ):
-            config = CoverageConfig()
-            plugin.configure(config)
-        debug_output = debug.get_output()
-        # check DebugControl writes
-        assert "ShellPlugin.configure" in debug_output
-        assert mock_parser_thread.call_count == 1
-        # check DebugControl is passed to CoverageParserThread
-        assert mock_parser_thread.call_args.kwargs["debug"] == debug
