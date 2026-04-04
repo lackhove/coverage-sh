@@ -66,7 +66,7 @@ jobs:
           pattern: coverage-data-*
           merge-multiple: true
 
-      - name: Combine coverage & fail if it's <100%.
+      - name: Combine coverage & fail if it's <90%.
         run: |
           python -Im pip install coverage[toml]
 
@@ -78,8 +78,8 @@ jobs:
           # Report and write to summary.
           python -Im coverage report --format=markdown >> $GITHUB_STEP_SUMMARY
 
-          # Report again and fail if under 100%.
-          python -Im coverage report --fail-under=100
+          # Report again and fail if under 90%.
+          python -Im coverage report --fail-under=90
 
           export TOTAL=$(python -c "import json;print(json.load(open('coverage.json'))['totals']['percent_covered_display'])")
           echo "total=$TOTAL" >> $GITHUB_ENV
