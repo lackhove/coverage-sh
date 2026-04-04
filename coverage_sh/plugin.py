@@ -66,14 +66,14 @@ def debug_write(msg: str, debug_control: DebugControl | None = None) -> None:
         # we are not recording coverage, so we have nowhere to send the message
         return
 
-    # DebugControl.write expects to be called from a frame with a "self" variable, so
-    # we use the same code to fetch that and pass it down to emulate that behavior
-    self = inspect.stack()[1][0].f_locals.get("self")  # noqa: F841
-
     try:
         debug_control = debug_control or Coverage.current()._debug  # type: ignore[union-attr]  # noqa: SLF001
 
         if debug_control.should(PLUGIN_DEBUG_OPTION):
+            # DebugControl.write expects to be called from a frame with a "self" variable, so
+            # we use the same code to fetch that and pass it down to emulate that behavior
+            self = inspect.stack()[1][0].f_locals.get("self")  # noqa: F841
+
             debug_control.write(msg)
     except Exception as e:  # noqa: BLE001
         warn(f'Failed to log debug message: "{msg}": {e}', stacklevel=2)

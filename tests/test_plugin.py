@@ -239,8 +239,6 @@ def test_end2end(
 class TestDebugWrite:
     def test_should_not_log_when_dsabled(self) -> None:
         debug_control = DebugControlString([])
-        # we need a variable named `self` in the caller frame that is of a known type
-        self = ShellPlugin({})  # type: ignore[assignment] # noqa: F841, PLW0642
 
         debug_write("foo", debug_control)
 
@@ -248,8 +246,6 @@ class TestDebugWrite:
 
     def test_should_log_when_enabled(self) -> None:
         debug_control = DebugControlString(["shell"])
-        # we need a variable named `self` in the caller frame that is of a known type
-        self = ShellPlugin({})  # type: ignore[assignment] # noqa: F841, PLW0642
 
         debug_write("foo", debug_control)
 
@@ -257,19 +253,16 @@ class TestDebugWrite:
 
     def test_should_log_self_when_enabled(self) -> None:
         debug_control = DebugControlString(["self", "shell"])
-        # we need a variable named `self` in the caller frame that is of a known type
-        self = ShellPlugin({})  # type: ignore[assignment] # noqa: F841, PLW0642
 
         debug_write("foo", debug_control)
 
         assert (
-            "self: <coverage_sh.plugin.ShellPlugin object" in debug_control.get_output()
+            "self: <tests.test_plugin.TestDebugWrite object at "
+            in debug_control.get_output()
         )
 
     def test_should_log_callers_when_enabled(self) -> None:
         debug_control = DebugControlString(["self", "callers", "shell"])
-        # we need a variable named `self` in the caller frame that is of a known type
-        self = ShellPlugin({})  # type: ignore[assignment] # noqa: F841, PLW0642
 
         debug_write("foo", debug_control)
 
