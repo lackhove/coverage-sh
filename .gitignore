@@ -1,6 +1,7 @@
 !.gigignore
 
 .idea
+.coverage*
 
 # python generated files
 __pycache__/
