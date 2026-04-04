@@ -45,7 +45,7 @@ The resulting coverage is then displayed alongside the coverage of the python fi
 
 ![coverage.sh report screenshot](doc/media/screenshot_html-report.png)
 
-## Caveats
+### Caveats
 
 The plugin works by patching the `subprocess.Popen` class to set the "ENV" and "BASH_ENV" environment variables before
 execution, to source a helper script which enables tracing. This approach comes with a few caveats:
@@ -53,7 +53,7 @@ execution, to source a helper script which enables tracing. This approach comes 
 - It will only cover shell scripts that are executed via the subprocess module.
 - Only bash and sh are supported
 
-## Cover-Always Mode
+### Cover-Always Mode
 
 When using the subprocess modue is not an option, coverage-sh can operate in "cover-always-mode", which is activated by
 setting
@@ -71,6 +71,10 @@ starting pytest from coverage , e.g.:
 ```bash
 coverage run -m pytest arg1 arg2 arg3
 ```
+
+## Debug Options
+
+The coverage-sh plugin uses coveragepy debug infrastructure. You can enable debug by setting the `COVERAGE_DEBUG` variable or by running coverage with the `--debug` flag. Logging in coverage-sh is enabled by the `shell` option. More options are documented in the [coveragepy documentation](https://coverage.readthedocs.io/en/latest/commands/cmd_debug.html#debug-option).
 
 ## License
 

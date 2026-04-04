@@ -1,11 +1,15 @@
 #  SPDX-License-Identifier: MIT
 #  Copyright (c) 2023-2024 Kilian Lackhove
+import io
+import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import threading
 from collections import defaultdict
+from collections.abc import Iterable
 from importlib.metadata import version
 from pathlib import Path
 from socket import gethostname
@@ -15,6 +19,7 @@ from typing import cast
 import coverage
 import pytest
 from coverage.config import CoverageConfig
+from coverage.debug import DebugControl
 from packaging.version import Version
 
 from coverage_sh.plugin import (
@@ -26,9 +31,84 @@ from coverage_sh.plugin import (
     PatchedPopen,
     ShellFileReporter,
     ShellPlugin,
+    debug_write,
     filename_suffix,
 )
 
+SYNTAX_EXAMPLE_EXECUTABLE_LINES = {
+    12,
+    15,
+    18,
+    19,
+    21,
+    25,
+    26,
+    31,
+    34,
+    37,
+    38,
+    41,
+    42,
+    45,
+    46,
+    47,
+    48,
+    51,
+    52,
+    54,
+    57,
+    60,
+    63,
+    67,
+    69,
+}
+
+SYNTAX_EXAMPLE_STDOUT = (
+    "Hello, World!\n"
+    "Variable is set to 'Hello, World!'\n"
+    "Iteration 1\n"
+    "Iteration 2\n"
+    "Iteration 3\n"
+    "Iteration 4\n"
+    "Iteration 5\n"
+    "Hello from a function!\n"
+    "Current OS is: Linux\n"
+    "5 + 3 = 8\n"
+    "This is a sample file.\n"
+    "You selected a banana.\n"
+    "multi line\n"
+    "multi line again\n"
+)
+SYNTAX_EXAMPLE_COVERED_LINES = [
+    12,
+    15,
+    18,
+    19,
+    25,
+    26,
+    31,
+    34,
+    37,
+    38,
+    41,
+    42,
+    45,
+    46,
+    47,
+    48,
+    51,
+    52,
+    57,
+    67,
+    69,
+]
+SYNTAX_EXAMPLE_MEASURED_LINES = [*SYNTAX_EXAMPLE_COVERED_LINES[:-2], 67, 70]
+SYNTAX_EXAMPLE_MISSING_LINES = [
+    21,
+    54,
+    60,
+    63,
+]
 COVERAGE_LINE_CHUNKS = (
     b"""\
 CCOV:::/home/dummy_user/dummy_dir_a:::1:::a normal line
@@ -63,6 +143,36 @@ COVERAGE_LINE_COVERAGE = {
     "/home/dummy_user/dummy_dir_b": {10},
 }
 
+#: expected output of testproject/test.sh
+END2END_STDOUT = SYNTAX_EXAMPLE_STDOUT + "Hello from inner python\n"
+#: lines executed inside inner.py
+INNER_PY_EXECUTED_LINES = [2]
+
+#: timeout for running end2end tests
+END2END_SUBPROCESS_TIMEOUT = 5
+
+
+@pytest.fixture
+def example_project_dir(tmp_path: Path) -> Path:
+    """Fixture for a temporary copy of `testproject`"""
+    source = Path(__file__).parent.parent / "example"
+    dest = tmp_path / "example"
+    shutil.copytree(source, dest)
+
+    return dest
+
+
+class DebugControlString(DebugControl):
+    """A `DebugControl` that writes to a StringIO, for testing."""
+
+    def __init__(self, options: Iterable[str]) -> None:
+        self.io = io.StringIO()
+        super().__init__(options, self.io)
+
+    def get_output(self) -> str:
+        """Get the output text from the `DebugControl`."""
+        return self.io.getvalue()
+
 
 @pytest.mark.parametrize("cover_always", [(True), (False)])
 def test_end2end(
@@ -93,7 +203,7 @@ def test_end2end(
         capture_output=True,
         text=True,
         check=True,
-        timeout=2,
+        timeout=END2END_SUBPROCESS_TIMEOUT,
     )
 
     if sys.version_info < (3, 14):
@@ -110,6 +220,70 @@ def test_end2end(
     cov_data = coverage.CoverageData(basename=".coverage", suffix="")
     cov_data.read()
     assert str(test_sh) in cov_data.measured_files()
+
+
+class TestDebugWrite:
+    def test_should_not_log_when_dsabled(self) -> None:
+        debug_control = DebugControlString([])
+
+        debug_write("foo", debug_control)
+
+        assert debug_control.get_output() == ""
+
+    def test_should_log_when_enabled(self) -> None:
+        debug_control = DebugControlString(["shell"])
+
+        debug_write("foo", debug_control)
+
+        assert debug_control.get_output() == "foo\n"
+
+    def test_should_log_self_when_enabled(self) -> None:
+        debug_control = DebugControlString(["self", "shell"])
+
+        debug_write("foo", debug_control)
+
+        assert (
+            "self: <tests.test_plugin.TestDebugWrite object at "
+            in debug_control.get_output()
+        )
+
+    def test_should_log_callers_when_enabled(self) -> None:
+        debug_control = DebugControlString(["self", "callers", "shell"])
+
+        debug_write("foo", debug_control)
+
+        assert "test_should_log_callers_when_enabled" in debug_control.get_output()
+
+
+def test_end2end_async_simple(example_project_dir: Path) -> None:
+    """
+    Test creating subprocess via asyncio
+
+    This used to hang without PatchedPopen.__del__ patching
+    """
+    argv = [sys.executable, "-m", "coverage", "run", "--parallel", "main_async.py"]
+    proc = subprocess.run(
+        argv,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=END2END_SUBPROCESS_TIMEOUT,
+        cwd=str(example_project_dir),
+    )
+    assert proc.stdout == END2END_STDOUT
+    subprocess.check_call(
+        [sys.executable, "-m", "coverage", "combine"],
+        cwd=str(example_project_dir),
+    )
+    subprocess.check_call(
+        [sys.executable, "-m", "coverage", "json"],
+        cwd=str(example_project_dir),
+    )
+    coverage_json = json.loads(
+        example_project_dir.joinpath("coverage.json").read_text()
+    )
+    assert coverage_json["files"]["main_async.py"]
+    assert coverage_json["files"]["test.sh"]["executed_lines"] == [8, 9, 10]
 
 
 class TestShellFileReporter:
@@ -403,6 +577,22 @@ class TestPatchedPopen:
         assert proc.stderr.read() == ""
         assert proc.stdout is not None
         assert proc.stdout.read() == "hello\n"
+
+    def test_wait_poll_notyet(self) -> None:
+        proc = PatchedPopen(
+            ["/bin/bash", "-c", "read;echo $REPLY"],
+            stdout=subprocess.PIPE,
+            stdin=subprocess.PIPE,
+        )
+        assert proc.poll() is None
+        with pytest.raises(subprocess.TimeoutExpired):
+            proc.wait(0.1)
+        out, err = proc.communicate(b"aaa")
+        assert out == b"aaa\n"
+        assert err is None
+        assert proc.returncode == 0
+        assert proc.poll() == 0
+        assert proc.wait() == 0
 
     def test_call_should_record_coverage_for_shell_script_invoking_python(
         self,
