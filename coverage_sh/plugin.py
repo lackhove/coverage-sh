@@ -293,10 +293,6 @@ class PatchedPopen(OriginalPopen):  # type: ignore[type-arg]
             super().__init__(*args, **kwargs)
             return
 
-        # minimal init for __repr__ to work for COVERAGE_DEBUG=self
-        self.returncode = None
-        self.args = args
-
         debug_write("__init__")
 
         # convert args into kwargs
