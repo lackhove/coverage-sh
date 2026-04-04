@@ -20,15 +20,15 @@ from time import sleep
 from typing import TYPE_CHECKING, Any, cast
 from warnings import warn
 
-import coverage
 import magic
 import tree_sitter_bash
-from coverage import CoveragePlugin, FileReporter, FileTracer
+from coverage import Coverage, CoverageData, CoveragePlugin, FileReporter, FileTracer
 from tree_sitter import Language, Parser
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
 
+    from coverage.debug import DebugControl
     from coverage.types import TConfigurable, TLineNo
     from tree_sitter import Node
 
@@ -55,6 +55,28 @@ EXECUTABLE_NODE_TYPES = {
     "list",
 }
 SUPPORTED_MIME_TYPES = {"text/x-shellscript"}
+
+PLUGIN_DEBUG_OPTION = "shell"
+
+
+def debug_write(msg: str, debug_control: DebugControl | None = None) -> None:
+
+    current_coverage = Coverage.current()
+    if current_coverage is None and debug_control is None:
+        # we are not recording coverage, so we have nowhere to send the message
+        return
+
+    try:
+        debug_control = debug_control or Coverage.current()._debug  # type: ignore[union-attr]  # noqa: SLF001
+
+        if debug_control.should(PLUGIN_DEBUG_OPTION):
+            # DebugControl.write expects to be called from a frame with a "self" variable, so
+            # we use the same code to fetch that and pass it down to emulate that behavior
+            self = inspect.stack()[1][0].f_locals.get("self")  # noqa: F841
+
+            debug_control.write(msg)
+    except Exception as e:  # noqa: BLE001
+        warn(f'Failed to log debug message: "{msg}": {e}', stacklevel=2)
 
 
 class ShellFileReporter(FileReporter):
@@ -163,7 +185,7 @@ class CoverageWriter:
 
     def write(self, line_data: LineData) -> None:
         suffix_ = "sh." + filename_suffix()
-        coverage_data = coverage.CoverageData(
+        coverage_data = CoverageData(
             basename=self._coverage_data_path,
             suffix=suffix_,
             # TODO: set warn, debug and no_disk
@@ -193,13 +215,18 @@ class CoverageParserThread(threading.Thread):
         with contextlib.suppress(FileNotFoundError):
             self.fifo_path.unlink()
         os.mkfifo(self.fifo_path, mode=stat.S_IRUSR | stat.S_IWUSR)
+        debug_write(
+            f"init done fifo_path={self.fifo_path}",
+        )
 
     def start(self) -> None:
+        debug_write("start")
         super().start()
         while not self._listening:
             sleep(0.0001)
 
     def stop(self) -> None:
+        debug_write("stop")
         self._keep_running = False
 
     def run(self) -> None:
@@ -215,6 +242,10 @@ class CoverageParserThread(threading.Thread):
             data_incoming = True
             while not eof and (data_incoming or self._keep_running):
                 events = sel.select(timeout=1)
+                if not len(events):
+                    debug_write(
+                        "select timeout, retry ...",
+                    )
                 data_incoming = len(events) > 0
                 for key, _ in events:
                     buf = os.read(key.fd, 2**10)
@@ -256,11 +287,13 @@ class PatchedPopen(OriginalPopen):  # type: ignore[type-arg]
     data_file_path: Path = Path.cwd()
 
     def __init__(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
-        if coverage.Coverage.current() is None:
+        if Coverage.current() is None:
             # we are not recording coverage, so just act like the original Popen
             self._parser_thread = None
             super().__init__(*args, **kwargs)
             return
+
+        debug_write("__init__")
 
         # convert args into kwargs
         sig = inspect.signature(subprocess.Popen)
@@ -282,8 +315,10 @@ class PatchedPopen(OriginalPopen):  # type: ignore[type-arg]
         super().__init__(**kwargs)
 
     def wait(self, timeout: float | None = None) -> int:
+        debug_write(f"wait timeout={timeout}")
         result = super().wait(timeout)
         self._clean_helper()
+        debug_write(f"wait result={result}")
         return result
 
     def poll(self) -> int | None:

@@ -1,5 +1,6 @@
 #  SPDX-License-Identifier: MIT
 #  Copyright (c) 2023-2024 Kilian Lackhove
+import io
 import json
 import os
 import re
@@ -7,6 +8,7 @@ import subprocess
 import sys
 import threading
 from collections import defaultdict
+from collections.abc import Iterable
 from importlib.metadata import version
 from pathlib import Path
 from socket import gethostname
@@ -16,6 +18,7 @@ from typing import cast
 import coverage
 import pytest
 from coverage.config import CoverageConfig
+from coverage.debug import DebugControl
 from packaging.version import Version
 
 from coverage_sh.plugin import (
@@ -27,6 +30,7 @@ from coverage_sh.plugin import (
     PatchedPopen,
     ShellFileReporter,
     ShellPlugin,
+    debug_write,
     filename_suffix,
 )
 
@@ -147,6 +151,18 @@ INNER_PY_EXECUTED_LINES = [2]
 END2END_SUBPROCESS_TIMEOUT = 5
 
 
+class DebugControlString(DebugControl):
+    """A `DebugControl` that writes to a StringIO, for testing."""
+
+    def __init__(self, options: Iterable[str]) -> None:
+        self.io = io.StringIO()
+        super().__init__(options, self.io)
+
+    def get_output(self) -> str:
+        """Get the output text from the `DebugControl`."""
+        return self.io.getvalue()
+
+
 @pytest.fixture
 def examples_dir(resources_dir: Path) -> Path:
     return resources_dir / "examples"
@@ -221,6 +237,39 @@ def test_end2end(
         coverage_json["files"]["syntax_example.sh"]["missing_lines"]
         == SYNTAX_EXAMPLE_MISSING_LINES
     )
+
+
+class TestDebugWrite:
+    def test_should_not_log_when_dsabled(self) -> None:
+        debug_control = DebugControlString([])
+
+        debug_write("foo", debug_control)
+
+        assert debug_control.get_output() == ""
+
+    def test_should_log_when_enabled(self) -> None:
+        debug_control = DebugControlString(["shell"])
+
+        debug_write("foo", debug_control)
+
+        assert debug_control.get_output() == "foo\n"
+
+    def test_should_log_self_when_enabled(self) -> None:
+        debug_control = DebugControlString(["self", "shell"])
+
+        debug_write("foo", debug_control)
+
+        assert (
+            "self: <tests.test_plugin.TestDebugWrite object at "
+            in debug_control.get_output()
+        )
+
+    def test_should_log_callers_when_enabled(self) -> None:
+        debug_control = DebugControlString(["self", "callers", "shell"])
+
+        debug_write("foo", debug_control)
+
+        assert "test_should_log_callers_when_enabled" in debug_control.get_output()
 
 
 @pytest.fixture(scope="session")
