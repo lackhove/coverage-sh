@@ -651,7 +651,7 @@ class TestShellPlugin:
     def test_find_executable_files_should_find_shell_files(
         self, tmp_path: Path
     ) -> None:
-        # A shell script with a non-standard extension — detected by MIME type
+        # A shell script with a non-standard extension — detected via shebang
         (tmp_path / "shell-file.weird.suffix").write_text("#!/bin/bash\necho hi\n")
         # A .sh file that contains Python — should NOT be detected as shell
         (tmp_path / "non-bash-file.sh").write_text("def main(): pass\n")
