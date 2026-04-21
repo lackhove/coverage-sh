@@ -31,6 +31,7 @@ from coverage_sh.plugin import (
     PatchedPopen,
     ShellFileReporter,
     ShellPlugin,
+    _is_shell_script,
     debug_write,
     filename_suffix,
 )
@@ -635,6 +636,74 @@ class TestMonitorThread:
             main_thread=cast("threading.Thread", self.MainThreadStub()),
         )
         monitor_thread.start()
+
+
+class TestShellScriptDetection:
+    @pytest.mark.parametrize(
+        ("filename", "content", "expected"),
+        [
+            ("file.txt", "#!/bin/sh\n", True),
+            ("file.txt", "#!/bin/bash", True),
+            ("file.txt", "#!/usr/bin/env bash\n", True),
+            ("file.txt", "#!/bin/dash", True),
+            ("file.txt", "#!/usr/bin/env zsh\n", True),
+            ("file.txt", "#!/bin/busybox ash\n", True),
+            ("file.txt", "  #!  /bin/ksh  \n", True),
+            ("file.txt", "#!/usr/bin/python3", False),
+            ("file.txt", "#!/usr/bin/env python", False),
+            ("file.txt", "#!/usr/bin/env ruby", False),
+            ("script.sh", "def main(): pass\n", False),
+            ("script.sh", "import os\n", False),
+            ("script.sh", "from pathlib import Path\n", False),
+            ("script.sh", "class Spam:\n", False),
+            ("script.sh", "async def foo() -> None:\n", False),
+            ("script.sh", "echo 'no shebang'\n", True),
+            ("script.sh", "# just a comment\n", True),
+            ("script.sh", "set -euo pipefail\n", True),
+            ("file.txt", "echo 'no shebang'\n", False),
+            ("file.txt", "# just a comment\n", False),
+            ("file.txt", "set -euo pipefail\n", False),
+            ("script.sh", "echo hi\n", True),
+            ("setup.bash", "echo hi\n", True),
+            ("Profile.zsh", "echo hi\n", True),
+            ("foo.DASH", "echo hi\n", True),
+            ("legacy.TCSH", "echo hi\n", True),
+            ("module.py", "echo hi\n", False),
+            ("README", "echo hi\n", False),
+            ("archive.tar.gz", "echo hi\n", False),
+            ("two-part.sh.bak", "echo hi\n", False),
+            ("empty-script.sh", "", True),
+            ("empty-text.txt", "", False),
+            ("spaces.txt", "   ", False),
+            ("empty-shebang.py", "#!  \n", False),
+        ],
+    )
+    def test_is_shell_script(
+        self,
+        tmp_path: Path,
+        filename: str,
+        content: str,
+        expected: bool,
+    ) -> None:
+        path = tmp_path / filename
+        path.write_text(content)
+        assert _is_shell_script(path) is expected
+
+    @pytest.mark.parametrize(
+        ("filename", "expected"),
+        [
+            ("file.txt", False),
+            ("file.sh", True),
+        ],
+    )
+    def test_is_shell_script_when_read_fails(
+        self,
+        tmp_path: Path,
+        filename: str,
+        expected: bool,
+    ) -> None:
+        path = tmp_path / filename
+        assert _is_shell_script(path) is expected
 
 
 class TestShellPlugin:
