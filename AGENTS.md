@@ -134,8 +134,7 @@ def test_something(cover_always: bool) -> None:
 
 - **Single-module plugin:** all production logic is in `coverage_sh/plugin.py`;
   `coverage_sh/__init__.py` is only a registration entry point
-- **File detection:** uses `python-magic` (libmagic) MIME type detection
-  (`text/x-shellscript`), not file extensions — do not assume `.sh` == shell script
+- **File detection:** based on extension or shebang
 - **Two coverage modes:** subprocess monkey-patching (default) and `cover_always` mode
   (sets `BASH_ENV`/`ENV` globally)
 - **FIFO pipeline:** bash processes write `COV:::<path>:::<lineno>:::` lines via
