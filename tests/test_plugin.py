@@ -248,6 +248,41 @@ class TestShellFileReporter:
             pytest.param(
                 "case x in\n  x) echo match ;;\nesac\n", {2, 3}, id="esac_excluded"
             ),
+            pytest.param(
+                """\
+                echo aaa
+                func()
+                {
+                    echo bbb
+                }
+                func
+                """,
+                {2, 5, 7},
+                id="func_brace",
+            ),
+            pytest.param(
+                """\
+                echo aaa
+                func()
+                (
+                    echo aaa
+                )
+                func
+                """,
+                {2, 5, 7},
+                id="func_paren",
+            ),
+            pytest.param(
+                """\
+                {
+                    echo aaa
+                    # comment
+                    echo bbb
+                } | grep a
+                """,
+                {3, 5, 6},
+                id="long_pipeline",
+            ),
         ],
     )
     def test_executable_lines(
