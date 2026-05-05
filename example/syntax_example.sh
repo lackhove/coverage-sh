@@ -64,6 +64,14 @@ case $fruit in
     ;;
 esac
 
+# branch coverage example
+selected=""
+if [[ $fruit == "banana" ]]; then
+    selected="banana"
+fi
+echo $selected
+
+
 echo multi \
     line
 echo \
