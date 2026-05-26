@@ -7,7 +7,6 @@ authors = [
 ]
 dependencies = [
     "coverage>=7.3.3",
-    "python-magic>=0.4.27",
     "tree-sitter>=0.22.0",
     "tree-sitter-bash",
 ]

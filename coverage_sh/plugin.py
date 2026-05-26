@@ -6,6 +6,7 @@ from __future__ import annotations
 import contextlib
 import inspect
 import os
+import re
 import selectors
 import stat
 import string
@@ -20,7 +21,6 @@ from time import sleep
 from typing import TYPE_CHECKING, Any, cast
 from warnings import warn
 
-import magic
 import tree_sitter_bash
 from coverage import Coverage, CoverageData, CoveragePlugin, FileReporter, FileTracer
 from tree_sitter import Language, Parser
@@ -52,7 +52,75 @@ EXECUTABLE_NODE_TYPES = {
     "case_statement",
     "list",
 }
-SUPPORTED_MIME_TYPES = {"text/x-shellscript"}
+
+# path.suffix for typical shell filenames
+_SHELL_FILE_SUFFIXES = {".bash", ".csh", ".dash", ".ksh", ".sh", ".tcsh", ".zsh"}
+
+# Interpreter names recognized in a shebang, after #!
+_SHELL_INTERPRETERS = {"ash", "bash", "csh", "dash", "fish", "ksh", "sh", "tcsh", "zsh"}
+
+# First line reads as a non-shell language throughout (e.g. Python in a *.sh file).
+_RE_NON_SHELL_FIRST_LINE = re.compile(
+    r"^\s*(?:def\s|import\s|from\s|class\s|async\s+def\s|@\w|'''|\"\"\")",
+)
+
+
+def _shebang_names_shell(rest: str) -> bool:
+    """Return whether the shebang body (text after ``#!``) invokes a shell."""
+    parts = rest.split()
+    if not parts:
+        return False
+    names = [part.rsplit("/", 1)[-1] for part in parts]
+    if names[0] in {"busybox", "env"}:
+        return len(names) > 1 and names[1] in _SHELL_INTERPRETERS
+    return names[0] in _SHELL_INTERPRETERS
+
+
+def _read_first_line(path: Path) -> str | None:
+    try:
+        with path.open("rb") as fh:
+            chunk = fh.read(4096)
+    except OSError:
+        return None
+    if not chunk:
+        return None
+    text = chunk.decode("utf-8", errors="replace")
+    return text.splitlines()[0]
+
+
+def _is_shell_script_header(first_line: str) -> bool | None:
+    """
+    Classify the first line for shell-script detection.
+
+    Returns ``True`` for a shell-style shebang. Returns ``False`` when it
+    clearly belongs to another language, otherwise return ``None``.
+    """
+    head = first_line.strip()
+    if head.startswith("#!"):
+        rest = head[2:].strip()
+        return _shebang_names_shell(rest)
+    if _RE_NON_SHELL_FIRST_LINE.match(first_line):
+        return False
+    return None
+
+
+def _is_shell_script_filename(path: Path) -> bool:
+    return path.suffix.lower() in _SHELL_FILE_SUFFIXES
+
+
+def _is_shell_script(path: Path) -> bool:
+    """
+    Guess if the file is a shell script
+
+    Returns ``True`` if first line has a shell-style shebang, or if filename has
+    a shell-like suffix and this is not ruled out by the first line.
+    """
+    first_line = _read_first_line(path) or ""
+    header = _is_shell_script_header(first_line)
+    if header is True:
+        return True
+    return _is_shell_script_filename(path) and header is not False
+
 
 PLUGIN_DEBUG_OPTION = "shell"
 
@@ -409,7 +477,7 @@ class ShellPlugin(CoveragePlugin):
 
     @staticmethod
     def _is_relevant(path: Path) -> bool:
-        return magic.from_file(path.resolve(), mime=True) in SUPPORTED_MIME_TYPES
+        return _is_shell_script(path.resolve())
 
     def file_tracer(self, filename: str) -> FileTracer | None:  # noqa: ARG002
         return None
